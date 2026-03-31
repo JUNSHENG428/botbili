@@ -473,13 +473,13 @@ export default async function LandingPage() {
 
         <div className="mt-12 grid grid-cols-2 gap-4 lg:grid-cols-4">
           {AGENT_ENTRIES.map((entry) => (
-            <Link key={entry.href} href={entry.href}>
+            <a key={entry.href} href={entry.href} target={entry.href.startsWith("/feed") ? undefined : "_blank"} rel="noopener noreferrer">
               <GlassCard className="h-full text-center transition hover:border-cyan-500/30">
                 <p className="text-2xl">{entry.icon}</p>
                 <h3 className="mt-2 text-sm font-semibold text-zinc-100">{entry.title}</h3>
                 <p className="mt-1 text-xs text-zinc-500">{entry.desc}</p>
               </GlassCard>
-            </Link>
+            </a>
           ))}
         </div>
       </section>
