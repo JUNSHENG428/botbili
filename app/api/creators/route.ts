@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { apiErrorResponse, withRateLimitHeaders } from "@/lib/api-response";
 import { generateApiKey } from "@/lib/auth";
+import { createClientForServer } from "@/lib/supabase/server";
 import { createCreator } from "@/lib/upload-repository";
 import { isHttpUrl } from "@/lib/utils";
 import type { ApiError, CreateCreatorRequest, CreateCreatorResponse } from "@/types";
@@ -10,12 +11,25 @@ import type { ApiError, CreateCreatorRequest, CreateCreatorResponse } from "@/ty
  * curl 测试命令：
  * curl -X POST http://localhost:3000/api/creators \
  *  -H "Content-Type: application/json" \
- *  -d '{"email":"demo@example.com","name":"AI科技日报","niche":"科技"}'
+ *  -d '{"name":"AI科技日报","niche":"科技"}'
  */
 export async function POST(
   request: Request,
 ): Promise<NextResponse<ApiError | CreateCreatorResponse>> {
   try {
+    const supabase = await createClientForServer();
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
+    if (userError || !user) {
+      return apiErrorResponse({
+        message: "Unauthorized",
+        code: "AUTH_UNAUTHORIZED",
+        status: 401,
+      });
+    }
+
     let body: unknown;
     try {
       body = await request.json();
@@ -36,13 +50,6 @@ export async function POST(
     }
 
     const payload = body as Partial<CreateCreatorRequest>;
-    if (typeof payload.email !== "string" || !payload.email.includes("@")) {
-      return apiErrorResponse({
-        message: "Invalid email",
-        code: "VALIDATION_EMAIL_INVALID",
-        status: 400,
-      });
-    }
     if (typeof payload.name !== "string" || payload.name.trim().length === 0) {
       return apiErrorResponse({
         message: "Invalid name",
@@ -60,8 +67,8 @@ export async function POST(
 
     const keyPair = generateApiKey();
     const creator = await createCreator(
+      user.id,
       {
-        email: payload.email.trim(),
         name: payload.name.trim(),
         niche: payload.niche?.trim(),
         bio: payload.bio?.trim(),

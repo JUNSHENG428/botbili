@@ -1,7 +1,13 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { POST } from "@/app/api/videos/[id]/interactions/route";
+import * as authLib from "@/lib/auth";
+import { createClientForServer } from "@/lib/supabase/server";
 import * as interactionsLib from "@/lib/video-interactions";
+
+vi.mock("@/lib/supabase/server", () => ({
+  createClientForServer: vi.fn(),
+}));
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -57,64 +63,47 @@ describe("POST /api/videos/[id]/interactions", () => {
     expect(data.code).toBe("VALIDATION_COMMENT_TOO_LONG");
   });
 
-  it("returns 500 when DB write fails", async () => {
-    vi.spyOn(interactionsLib, "createVideoInteraction").mockRejectedValueOnce(
-      new Error("db down"),
-    );
+  it("returns 401 for unauthenticated human request", async () => {
+    vi.mocked(createClientForServer).mockResolvedValueOnce({
+      auth: {
+        getUser: vi.fn().mockResolvedValue({ data: { user: null }, error: null }),
+      },
+    } as unknown as Awaited<ReturnType<typeof createClientForServer>>);
 
     const request = new Request("http://localhost:3000/api/videos/vid_1/interactions", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        viewer_type: "human",
         action: "like",
       }),
     });
 
     const response = await POST(request, { params: Promise.resolve({ id: "vid_1" }) });
-    expect(response.status).toBe(500);
-    const data = (await response.json()) as { code: string; message?: string };
-    expect(data.code).toBe("INTERNAL_ERROR");
-    expect(data.message).toBe("Internal server error");
+    expect(response.status).toBe(401);
+    const data = (await response.json()) as { code: string };
+    expect(data.code).toBe("AUTH_UNAUTHORIZED");
   });
 
-  it("auto-detects ai viewer_type by header", async () => {
-    const spy = vi
-      .spyOn(interactionsLib, "createVideoInteraction")
-      .mockResolvedValueOnce({
-        id: "int_1",
-        video_id: "vid_1",
-        viewer_type: "ai",
-        action: "view",
-        content: null,
-        viewer_label: "HeaderAgent",
-        created_at: new Date().toISOString(),
-      });
-
-    const request = new Request("http://localhost:3000/api/videos/vid_1/interactions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-botbili-viewer-type": "ai",
-      },
-      body: JSON.stringify({
-        action: "view",
-        viewer_label: "HeaderAgent",
-      }),
+  it("accepts AI interaction with valid bearer token", async () => {
+    vi.spyOn(authLib, "verifyApiKey").mockResolvedValueOnce({
+      id: "creator_1",
+      owner_id: "user_1",
+      name: "TokenAgent",
+      avatar_url: null,
+      bio: "",
+      niche: "",
+      style: "",
+      agent_key_hash: "hash",
+      plan_type: "free",
+      upload_quota: 30,
+      uploads_this_month: 0,
+      quota_reset_at: "2026-04-01T00:00:00Z",
+      followers_count: 0,
+      is_active: true,
+      created_at: "2026-03-31T10:00:00Z",
+      updated_at: "2026-03-31T10:00:00Z",
     });
-
-    const response = await POST(request, { params: Promise.resolve({ id: "vid_1" }) });
-    expect(response.status).toBe(201);
-    expect(spy).toHaveBeenCalledWith(
-      expect.objectContaining({
-        viewerType: "ai",
-        action: "view",
-      }),
-    );
-  });
-
-  it("auto-detects ai viewer_type by bearer token", async () => {
-    const spy = vi
+    const createSpy = vi
       .spyOn(interactionsLib, "createVideoInteraction")
       .mockResolvedValueOnce({
         id: "int_2",
@@ -134,39 +123,27 @@ describe("POST /api/videos/[id]/interactions", () => {
       },
       body: JSON.stringify({
         action: "like",
-        viewer_label: "TokenAgent",
       }),
     });
 
     const response = await POST(request, { params: Promise.resolve({ id: "vid_1" }) });
     expect(response.status).toBe(201);
-    expect(spy).toHaveBeenCalledWith(
+    expect(createSpy).toHaveBeenCalledWith(
       expect.objectContaining({
         viewerType: "ai",
-        action: "like",
+        viewerLabel: "TokenAgent",
       }),
     );
   });
 
-  it("fills viewer_label from agent name header when inferred as ai", async () => {
-    const spy = vi
-      .spyOn(interactionsLib, "createVideoInteraction")
-      .mockResolvedValueOnce({
-        id: "int_3",
-        video_id: "vid_1",
-        viewer_type: "ai",
-        action: "view",
-        content: null,
-        viewer_label: "OpenClaw",
-        created_at: new Date().toISOString(),
-      });
+  it("returns 401 when bearer API key is invalid", async () => {
+    vi.spyOn(authLib, "verifyApiKey").mockResolvedValueOnce(null);
 
     const request = new Request("http://localhost:3000/api/videos/vid_1/interactions", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "x-botbili-viewer-type": "ai",
-        "x-botbili-agent-name": "OpenClaw",
+        Authorization: "Bearer bb_invalid",
       },
       body: JSON.stringify({
         action: "view",
@@ -174,27 +151,73 @@ describe("POST /api/videos/[id]/interactions", () => {
     });
 
     const response = await POST(request, { params: Promise.resolve({ id: "vid_1" }) });
+    expect(response.status).toBe(401);
+    const data = (await response.json()) as { code: string };
+    expect(data.code).toBe("AUTH_INVALID_KEY");
+  });
+
+  it("supports authenticated human interaction", async () => {
+    vi.mocked(createClientForServer).mockResolvedValueOnce({
+      auth: {
+        getUser: vi.fn().mockResolvedValue({
+          data: { user: { id: "user_1", email: "human@example.com", user_metadata: {} } },
+          error: null,
+        }),
+      },
+    } as unknown as Awaited<ReturnType<typeof createClientForServer>>);
+    const createSpy = vi
+      .spyOn(interactionsLib, "createVideoInteraction")
+      .mockResolvedValueOnce({
+        id: "int_9",
+        video_id: "vid_1",
+        viewer_type: "human",
+        action: "comment",
+        content: "人类评论",
+        viewer_label: null,
+        created_at: new Date().toISOString(),
+      });
+
+    const request = new Request("http://localhost:3000/api/videos/vid_1/interactions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        action: "comment",
+        content: "人类评论",
+      }),
+    });
+
+    const response = await POST(request, { params: Promise.resolve({ id: "vid_1" }) });
     expect(response.status).toBe(201);
-    expect(spy).toHaveBeenCalledWith(
+    expect(createSpy).toHaveBeenCalledWith(
       expect.objectContaining({
-        viewerType: "ai",
-        viewerLabel: "OpenClaw",
+        viewerType: "human",
+        action: "comment",
       }),
     );
   });
 
-  it("fills viewer_label as AI Viewer when inferred as ai without name", async () => {
-    const spy = vi
-      .spyOn(interactionsLib, "createVideoInteraction")
-      .mockResolvedValueOnce({
-        id: "int_4",
-        video_id: "vid_1",
-        viewer_type: "ai",
-        action: "view",
-        content: null,
-        viewer_label: "AI Viewer",
-        created_at: new Date().toISOString(),
-      });
+  it("returns 500 when DB write fails", async () => {
+    vi.spyOn(authLib, "verifyApiKey").mockResolvedValueOnce({
+      id: "creator_1",
+      owner_id: "user_1",
+      name: "TokenAgent",
+      avatar_url: null,
+      bio: "",
+      niche: "",
+      style: "",
+      agent_key_hash: "hash",
+      plan_type: "free",
+      upload_quota: 30,
+      uploads_this_month: 0,
+      quota_reset_at: "2026-04-01T00:00:00Z",
+      followers_count: 0,
+      is_active: true,
+      created_at: "2026-03-31T10:00:00Z",
+      updated_at: "2026-03-31T10:00:00Z",
+    });
+    vi.spyOn(interactionsLib, "createVideoInteraction").mockRejectedValueOnce(new Error("db down"));
 
     const request = new Request("http://localhost:3000/api/videos/vid_1/interactions", {
       method: "POST",
@@ -203,53 +226,14 @@ describe("POST /api/videos/[id]/interactions", () => {
         Authorization: "Bearer bb_test_agent_key",
       },
       body: JSON.stringify({
-        action: "view",
+        action: "like",
       }),
     });
 
     const response = await POST(request, { params: Promise.resolve({ id: "vid_1" }) });
-    expect(response.status).toBe(201);
-    expect(spy).toHaveBeenCalledWith(
-      expect.objectContaining({
-        viewerType: "ai",
-        viewerLabel: "AI Viewer",
-      }),
-    );
-  });
-
-  it("truncates x-botbili-agent-name to 60 chars", async () => {
-    const longName = "A".repeat(100);
-    const spy = vi
-      .spyOn(interactionsLib, "createVideoInteraction")
-      .mockResolvedValueOnce({
-        id: "int_5",
-        video_id: "vid_1",
-        viewer_type: "ai",
-        action: "view",
-        content: null,
-        viewer_label: "A".repeat(60),
-        created_at: new Date().toISOString(),
-      });
-
-    const request = new Request("http://localhost:3000/api/videos/vid_1/interactions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-botbili-viewer-type": "ai",
-        "x-botbili-agent-name": longName,
-      },
-      body: JSON.stringify({
-        action: "view",
-      }),
-    });
-
-    const response = await POST(request, { params: Promise.resolve({ id: "vid_1" }) });
-    expect(response.status).toBe(201);
-    expect(spy).toHaveBeenCalledWith(
-      expect.objectContaining({
-        viewerType: "ai",
-        viewerLabel: "A".repeat(60),
-      }),
-    );
+    expect(response.status).toBe(500);
+    const data = (await response.json()) as { code: string; message?: string };
+    expect(data.code).toBe("INTERNAL_ERROR");
+    expect(data.message).toBe("Internal server error");
   });
 });

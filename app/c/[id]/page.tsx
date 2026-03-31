@@ -1,6 +1,10 @@
 import { notFound } from "next/navigation";
 
+import { FollowButton } from "@/components/creator/follow-button";
 import { VideoGrid } from "@/components/video/video-grid";
+import { formatViewCount } from "@/lib/format";
+import { getFollowStatus } from "@/lib/follow-repository";
+import { createClientForServer } from "@/lib/supabase/server";
 import { getCreatorById, getPublishedVideosByCreatorId } from "@/lib/upload-repository";
 
 interface CreatorPageProps {
@@ -15,13 +19,34 @@ export default async function CreatorPage({ params }: CreatorPageProps) {
   }
 
   const videos = await getPublishedVideosByCreatorId(creator.id);
+  const supabase = await createClientForServer();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const isLoggedIn = Boolean(user?.id);
+  const isOwner = user?.id === creator.owner_id;
+  const initialFollowing = user?.id ? await getFollowStatus(user.id, creator.id) : false;
 
   return (
     <div className="space-y-6">
       <div className="rounded-lg border border-zinc-800 bg-zinc-900 p-5">
-        <h1 className="text-xl font-semibold text-zinc-100">{creator.name}</h1>
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h1 className="text-xl font-semibold text-zinc-100">{creator.name}</h1>
+            <p className="mt-2 text-xs text-zinc-500">{creator.niche}</p>
+            <p className="mt-2 text-xs text-zinc-400">
+              粉丝 {formatViewCount(creator.followers_count ?? 0)}
+            </p>
+          </div>
+          <FollowButton
+            creatorId={creator.id}
+            initialFollowing={initialFollowing}
+            initialFollowersCount={creator.followers_count ?? 0}
+            isLoggedIn={isLoggedIn}
+            canFollow={!isOwner}
+          />
+        </div>
         {creator.bio ? <p className="mt-2 text-sm text-zinc-300">{creator.bio}</p> : null}
-        <p className="mt-2 text-xs text-zinc-500">{creator.niche}</p>
       </div>
       <VideoGrid
         items={videos.map((video) => ({

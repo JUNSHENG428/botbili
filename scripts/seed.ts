@@ -21,12 +21,12 @@ async function run(): Promise<void> {
   const supabase = createAdminClient();
 
   for (const creatorSeed of CREATOR_SEEDS) {
-    const ownerEmail = `${creatorSeed.name.toLowerCase()}@example.com`;
+    const ownerId = randomUUID();
     const keyHash = randomUUID().replaceAll("-", "");
     const { data: creator, error: creatorError } = await supabase
       .from("creators")
       .insert({
-        owner_email: ownerEmail,
+        owner_id: ownerId,
         name: creatorSeed.name,
         niche: creatorSeed.niche,
         bio: creatorSeed.bio,

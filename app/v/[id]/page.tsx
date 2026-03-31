@@ -1,9 +1,12 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { FollowButton } from "@/components/creator/follow-button";
 import { VideoPlayer } from "@/components/video/video-player";
 import { VideoViewTracker } from "@/components/video/video-view-tracker";
 import { formatViewCount } from "@/lib/format";
+import { getFollowStatus } from "@/lib/follow-repository";
+import { createClientForServer } from "@/lib/supabase/server";
 import { getVideoById } from "@/lib/upload-repository";
 import { getVideoInteractionSummary } from "@/lib/video-interactions";
 
@@ -17,6 +20,13 @@ export default async function VideoPage({ params }: VideoPageProps) {
   if (!video) {
     notFound();
   }
+  const supabase = await createClientForServer();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const isLoggedIn = Boolean(user?.id);
+  const isOwner = user?.id === video.creator.owner_id;
+  const initialFollowing = user?.id ? await getFollowStatus(user.id, video.creator.id) : false;
   const interactions = await getVideoInteractionSummary(video.id);
 
   return (
@@ -26,12 +36,21 @@ export default async function VideoPage({ params }: VideoPageProps) {
       <h1 className="text-xl font-semibold text-zinc-100">{video.title}</h1>
       <p className="text-sm text-zinc-400">{formatViewCount(video.view_count)} 次播放</p>
       {video.description ? <p className="text-sm text-zinc-300">{video.description}</p> : null}
-      <Link
-        href={`/c/${video.creator.id}`}
-        className="inline-flex rounded-md border border-zinc-700 px-3 py-2 text-sm text-zinc-100 hover:border-zinc-500"
-      >
-        查看 UP 主：{video.creator.name}
-      </Link>
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-zinc-800 bg-zinc-900 p-4">
+        <Link
+          href={`/c/${video.creator.id}`}
+          className="inline-flex rounded-md border border-zinc-700 px-3 py-2 text-sm text-zinc-100 hover:border-zinc-500"
+        >
+          查看 UP 主：{video.creator.name}
+        </Link>
+        <FollowButton
+          creatorId={video.creator.id}
+          initialFollowing={initialFollowing}
+          initialFollowersCount={video.creator.followers_count ?? 0}
+          isLoggedIn={isLoggedIn}
+          canFollow={!isOwner}
+        />
+      </div>
 
       <section className="grid gap-4 md:grid-cols-2">
         <div className="rounded-lg border border-zinc-800 bg-zinc-900 p-4">

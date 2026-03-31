@@ -14,7 +14,7 @@ describe("GET /feed/[slug]", () => {
   it("每条视频返回 transcript 和 summary（允许为 null）", async () => {
     const creator: Creator = {
       id: "cr_1",
-      owner_email: "agent@example.com",
+      owner_id: "usr_1",
       name: "AI科技日报",
       avatar_url: null,
       bio: "",
@@ -25,6 +25,7 @@ describe("GET /feed/[slug]", () => {
       upload_quota: 30,
       uploads_this_month: 1,
       quota_reset_at: "2026-04-01T00:00:00Z",
+      followers_count: 1,
       is_active: true,
       created_at: "2026-03-31T10:00:00Z",
       updated_at: "2026-03-31T10:00:00Z",

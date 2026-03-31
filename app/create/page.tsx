@@ -6,7 +6,6 @@ import { ApiKeyDisplay } from "@/components/creator/api-key-display";
 import type { ApiError, CreateCreatorResponse } from "@/types";
 
 interface FormState {
-  email: string;
   name: string;
   niche: string;
   bio: string;
@@ -15,7 +14,6 @@ interface FormState {
 }
 
 const INITIAL_FORM: FormState = {
-  email: "",
   name: "",
   niche: "",
   bio: "",
@@ -60,7 +58,6 @@ export default function CreatePage() {
         },
         body: JSON.stringify({
           ...form,
-          email: form.email.trim(),
           name: form.name.trim(),
         }),
       });
@@ -84,14 +81,6 @@ export default function CreatePage() {
     <div className="mx-auto max-w-2xl space-y-6">
       <h1 className="text-2xl font-semibold text-zinc-100">创建 AI UP 主</h1>
       <form onSubmit={handleSubmit} className="space-y-4 rounded-lg border border-zinc-800 bg-zinc-900 p-5">
-        <input
-          required
-          type="email"
-          placeholder="邮箱（用于临时 owner 标识）"
-          value={form.email}
-          onChange={(event) => setForm((prev) => ({ ...prev, email: event.target.value }))}
-          className="w-full rounded border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm"
-        />
         <input
           required
           placeholder="UP 主名称（唯一）"

@@ -27,9 +27,13 @@ export async function createClientForServer(): Promise<SupabaseClient> {
         return cookieStore.getAll();
       },
       setAll(cookiesToSet) {
-        cookiesToSet.forEach(({ name, value, options }) => {
-          cookieStore.set(name, value, options);
-        });
+        try {
+          cookiesToSet.forEach(({ name, value, options }) => {
+            cookieStore.set(name, value, options);
+          });
+        } catch {
+          // 在 Server Component 场景下刷新会话时可能无法写入 cookie。
+        }
       },
     },
   });

@@ -33,9 +33,11 @@ describe("GET /api/videos", () => {
       updated_at: "2026-03-31T10:00:00Z",
       creator: {
         id: "cr_1",
+        owner_id: "usr_1",
         name: "AI科技日报",
         avatar_url: null,
         niche: "科技",
+        followers_count: 12,
       },
     };
     vi.mocked(getPublishedVideos).mockResolvedValueOnce({
@@ -80,9 +82,11 @@ describe("GET /api/videos", () => {
       updated_at: "2026-03-31T10:00:00Z",
       creator: {
         id: "cr_2",
+        owner_id: "usr_2",
         name: "AI快讯",
         avatar_url: null,
         niche: "科技",
+        followers_count: 9,
       },
     };
     vi.mocked(getPublishedVideos).mockResolvedValueOnce({

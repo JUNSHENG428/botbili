@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 
 import { apiErrorResponse, withRateLimitHeaders } from "@/lib/api-response";
+import { extractBearerToken, hashApiKey, verifyApiKey } from "@/lib/auth";
+import { createClientForServer } from "@/lib/supabase/server";
 import { createVideoInteraction, getVideoInteractionSummary } from "@/lib/video-interactions";
 import type { ApiError, InteractionAction, VideoInteractionSummary, ViewerType } from "@/types";
 
@@ -23,42 +25,14 @@ interface InteractionSummaryResponse {
   data: VideoInteractionSummary;
 }
 
-const VALID_VIEWER_TYPES: ViewerType[] = ["ai", "human"];
+const VALID_VIEWER_TYPES: ViewerType[] = ["human", "ai"];
 const VALID_ACTIONS: InteractionAction[] = ["view", "like", "comment", "share"];
-
-function parseBearerToken(authorizationHeader: string | null): string | null {
-  if (!authorizationHeader) {
-    return null;
-  }
-  const [scheme, token] = authorizationHeader.split(" ");
-  if (scheme !== "Bearer" || !token) {
-    return null;
-  }
-  return token.trim();
-}
-
-function resolveViewerType(request: Request, explicitViewerType?: ViewerType): ViewerType {
-  if (explicitViewerType && VALID_VIEWER_TYPES.includes(explicitViewerType)) {
-    return explicitViewerType;
-  }
-
-  const headerViewerType = request.headers.get("x-botbili-viewer-type");
-  if (headerViewerType === "ai" || headerViewerType === "human") {
-    return headerViewerType;
-  }
-
-  const token = parseBearerToken(request.headers.get("authorization"));
-  if (token?.startsWith("bb_")) {
-    return "ai";
-  }
-
-  return "human";
-}
 
 function resolveViewerLabel(
   request: Request,
   explicitViewerLabel: string | undefined,
   viewerType: ViewerType,
+  fallbackViewerLabel?: string,
 ): string | undefined {
   const normalizedExplicit = explicitViewerLabel?.trim();
   if (normalizedExplicit) {
@@ -76,7 +50,68 @@ function resolveViewerLabel(
     return normalizedHeaderName.slice(0, 60);
   }
 
-  return "AI Viewer";
+  return fallbackViewerLabel ?? "AI Viewer";
+}
+
+interface ResolvedViewerContext {
+  viewerType: ViewerType;
+  viewerLabel?: string;
+}
+
+async function resolveViewerContext(
+  request: Request,
+  payload: InteractionCreateRequest,
+): Promise<ResolvedViewerContext | NextResponse<ApiError>> {
+  const token = extractBearerToken(request.headers.get("authorization"));
+
+  if (token) {
+    const creator = await verifyApiKey(hashApiKey(token));
+    if (!creator || !creator.is_active) {
+      return apiErrorResponse({
+        message: "Unauthorized",
+        code: "AUTH_INVALID_KEY",
+        status: 401,
+      });
+    }
+    if (payload.viewer_type === "human") {
+      return apiErrorResponse({
+        message: "viewer_type mismatch with auth mode",
+        code: "VALIDATION_VIEWER_TYPE_MISMATCH",
+        status: 400,
+      });
+    }
+
+    return {
+      viewerType: "ai",
+      viewerLabel: resolveViewerLabel(request, payload.viewer_label, "ai", creator.name),
+    };
+  }
+
+  if (payload.viewer_type === "ai") {
+    return apiErrorResponse({
+      message: "Unauthorized",
+      code: "AUTH_INVALID_KEY",
+      status: 401,
+    });
+  }
+
+  const supabase = await createClientForServer();
+  const {
+    data: { user },
+    error,
+  } = await supabase.auth.getUser();
+  if (error || !user) {
+    return apiErrorResponse({
+      message: "Unauthorized",
+      code: "AUTH_UNAUTHORIZED",
+      status: 401,
+    });
+  }
+
+  return {
+    viewerType: "human",
+    viewerLabel: resolveViewerLabel(request, payload.viewer_label, "human"),
+  };
 }
 
 /**
@@ -155,19 +190,17 @@ export async function POST(
       });
     }
 
-    const resolvedViewerType = resolveViewerType(request, payload.viewer_type);
-    const resolvedViewerLabel = resolveViewerLabel(
-      request,
-      payload.viewer_label,
-      resolvedViewerType,
-    );
+    const resolvedViewer = await resolveViewerContext(request, payload);
+    if (resolvedViewer instanceof NextResponse) {
+      return resolvedViewer;
+    }
 
     await createVideoInteraction({
       videoId,
-      viewerType: resolvedViewerType,
+      viewerType: resolvedViewer.viewerType,
       action: payload.action,
       content: payload.content?.trim(),
-      viewerLabel: resolvedViewerLabel,
+      viewerLabel: resolvedViewer.viewerLabel,
     });
 
     return withRateLimitHeaders(NextResponse.json({ ok: true }, { status: 201 }));

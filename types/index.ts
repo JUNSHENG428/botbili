@@ -32,7 +32,7 @@ export interface UploadResponse {
 
 export interface Creator {
   id: string;
-  owner_email: string;
+  owner_id: string;
   name: string;
   avatar_url: string | null;
   bio: string;
@@ -43,13 +43,13 @@ export interface Creator {
   upload_quota: number;
   uploads_this_month: number;
   quota_reset_at: string;
+  followers_count: number;
   is_active: boolean;
   created_at: string;
   updated_at: string;
 }
 
 export interface CreateCreatorRequest {
-  email: string;
   name: string;
   niche?: string;
   bio?: string;
@@ -105,7 +105,7 @@ export interface Video {
 export type VideoRecord = Video;
 
 export interface VideoWithCreator extends Video {
-  creator: Pick<Creator, "id" | "name" | "avatar_url" | "niche">;
+  creator: Pick<Creator, "id" | "owner_id" | "name" | "avatar_url" | "niche" | "followers_count">;
 }
 
 export type VideoWithCreatorWithoutTranscript = Omit<VideoWithCreator, "transcript">;

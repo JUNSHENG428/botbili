@@ -24,9 +24,11 @@ interface CreatorQuotaUpdate {
 interface PublishedVideosQueryRow extends VideoRecord {
   creator: {
     id: string;
+    owner_id: string;
     name: string;
     avatar_url: string | null;
     niche: string;
+    followers_count: number;
   };
 }
 
@@ -162,6 +164,7 @@ export async function createVideo(
  * 创建 AI UP 主记录（仅存 API Key 哈希）。
  */
 export async function createCreator(
+  ownerId: string,
   payload: CreateCreatorRequest,
   apiKeyHash: string,
 ): Promise<Creator> {
@@ -169,7 +172,7 @@ export async function createCreator(
   const { data, error } = await supabase
     .from("creators")
     .insert({
-      owner_email: payload.email,
+      owner_id: ownerId,
       name: payload.name.trim(),
       niche: payload.niche ?? "",
       bio: payload.bio ?? "",
@@ -227,7 +230,7 @@ export async function getPublishedVideos(
     const { data, error } = await supabase
       .from("videos")
       .select(
-        "id, creator_id, title, description, tags, raw_video_url, thumbnail_url, transcript, summary, language, cloudflare_video_id, cloudflare_playback_url, duration_seconds, view_count, like_count, status, moderation_result, source, created_at, updated_at, creator:creators!videos_creator_id_fkey(id, name, avatar_url, niche)",
+        "id, creator_id, title, description, tags, raw_video_url, thumbnail_url, transcript, summary, language, cloudflare_video_id, cloudflare_playback_url, duration_seconds, view_count, like_count, status, moderation_result, source, created_at, updated_at, creator:creators!videos_creator_id_fkey(id, owner_id, name, avatar_url, niche, followers_count)",
       )
       .eq("status", "published")
       .order(orderColumn, { ascending: false })
@@ -240,18 +243,20 @@ export async function getPublishedVideos(
 
     items = (data ?? []).map((item) => ({
       ...item,
-      creator: {
-        id: item.creator.id,
-        name: item.creator.name,
-        avatar_url: item.creator.avatar_url,
-        niche: item.creator.niche,
-      },
-    }));
+        creator: {
+          id: item.creator.id,
+          owner_id: item.creator.owner_id,
+          name: item.creator.name,
+          avatar_url: item.creator.avatar_url,
+          niche: item.creator.niche,
+          followers_count: item.creator.followers_count,
+        },
+      }));
   } else {
     const { data, error } = await supabase
       .from("videos")
       .select(
-        "id, creator_id, title, description, tags, raw_video_url, thumbnail_url, summary, language, cloudflare_video_id, cloudflare_playback_url, duration_seconds, view_count, like_count, status, moderation_result, source, created_at, updated_at, creator:creators!videos_creator_id_fkey(id, name, avatar_url, niche)",
+        "id, creator_id, title, description, tags, raw_video_url, thumbnail_url, summary, language, cloudflare_video_id, cloudflare_playback_url, duration_seconds, view_count, like_count, status, moderation_result, source, created_at, updated_at, creator:creators!videos_creator_id_fkey(id, owner_id, name, avatar_url, niche, followers_count)",
       )
       .eq("status", "published")
       .order(orderColumn, { ascending: false })
@@ -264,13 +269,15 @@ export async function getPublishedVideos(
 
     items = (data ?? []).map((item) => ({
       ...item,
-      creator: {
-        id: item.creator.id,
-        name: item.creator.name,
-        avatar_url: item.creator.avatar_url,
-        niche: item.creator.niche,
-      },
-    }));
+        creator: {
+          id: item.creator.id,
+          owner_id: item.creator.owner_id,
+          name: item.creator.name,
+          avatar_url: item.creator.avatar_url,
+          niche: item.creator.niche,
+          followers_count: item.creator.followers_count,
+        },
+      }));
   }
   const total = count ?? 0;
   const hasMore = from + items.length < total;
@@ -285,7 +292,7 @@ export async function getVideoById(videoId: string): Promise<VideoWithCreator | 
   const { data: rawVideo, error: videoError } = await supabase
     .from("videos")
     .select(
-      "*, creator:creators!videos_creator_id_fkey(id, name, avatar_url, niche)",
+      "*, creator:creators!videos_creator_id_fkey(id, owner_id, name, avatar_url, niche, followers_count)",
     )
     .eq("id", videoId)
     .eq("status", "published")
@@ -313,9 +320,11 @@ export async function getVideoById(videoId: string): Promise<VideoWithCreator | 
     view_count: nextViewCount,
     creator: {
       id: rawVideo.creator.id,
+      owner_id: rawVideo.creator.owner_id,
       name: rawVideo.creator.name,
       avatar_url: rawVideo.creator.avatar_url,
       niche: rawVideo.creator.niche,
+      followers_count: rawVideo.creator.followers_count,
     },
   };
 }
