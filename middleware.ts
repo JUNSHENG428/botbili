@@ -1,12 +1,40 @@
+import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-import { updateSession } from "@/lib/supabase/middleware";
+const AUTH_ROUTES = ["/create", "/dashboard", "/settings", "/onboarding"];
+const INVITE_ROUTES = ["/create", "/dashboard", "/onboarding"];
 
-const AUTH_ROUTES = ["/create", "/dashboard", "/settings"];
-const INVITE_ROUTES = ["/create", "/dashboard"];
+function getEnv(name: string): string {
+  const value = process.env[name];
+  if (!value) throw new Error(`Missing required env: ${name}`);
+  return value;
+}
 
 export async function middleware(request: NextRequest): Promise<NextResponse> {
-  const { supabaseResponse, user } = await updateSession(request);
+  let response = NextResponse.next({ request });
+
+  const supabase = createServerClient(
+    getEnv("NEXT_PUBLIC_SUPABASE_URL"),
+    getEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY"),
+    {
+      cookies: {
+        getAll() {
+          return request.cookies.getAll();
+        },
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
+          response = NextResponse.next({ request });
+          cookiesToSet.forEach(({ name, value, options }) =>
+            response.cookies.set(name, value, options),
+          );
+        },
+      },
+    },
+  );
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
   const pathname = request.nextUrl.pathname;
 
@@ -14,7 +42,7 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
     return NextResponse.redirect(new URL("/feed", request.url));
   }
 
-  const needsAuth = AUTH_ROUTES.some((route) => pathname.startsWith(route));
+  const needsAuth = AUTH_ROUTES.some((r) => pathname.startsWith(r));
   if (!user && needsAuth) {
     const loginUrl = request.nextUrl.clone();
     loginUrl.pathname = "/login";
@@ -22,16 +50,24 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
     return NextResponse.redirect(loginUrl);
   }
 
-  const needsInvite = INVITE_ROUTES.some((route) => pathname.startsWith(route));
-  if (user && needsInvite) {
-    // TODO: 接入邀请码系统后，在这里校验 invite_code_usage。
+  if (user && pathname !== "/invite" && INVITE_ROUTES.some((r) => pathname.startsWith(r))) {
+    const { data: usage } = await supabase
+      .from("invite_code_usage")
+      .select("id")
+      .eq("user_id", user.id)
+      .limit(1)
+      .maybeSingle();
+
+    if (!usage) {
+      return NextResponse.redirect(new URL("/invite", request.url));
+    }
   }
 
-  return supabaseResponse;
+  return response;
 }
 
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|txt|json|md)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|txt|json|xml|md)$).*)",
   ],
 };
