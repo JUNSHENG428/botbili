@@ -87,28 +87,14 @@ export async function POST(
 
     const channelUrl = `/c/${creator.id}`;
 
-    if (isAgentRequest(request)) {
-      return withRateLimitHeaders(
-        NextResponse.json(
-          {
-            creator_id: creator.id,
-            name: creator.name,
-            api_key: keyPair.plain,
-            channel_url: channelUrl,
-            message: "API Key 仅此一次，请立即保存",
-          },
-          { status: 201 },
-        ),
-      );
-    }
-
     return withRateLimitHeaders(
       NextResponse.json(
         {
           creator_id: creator.id,
           name: creator.name,
+          api_key: keyPair.plain,
           channel_url: channelUrl,
-          message: "频道创建成功",
+          message: "API Key 仅此一次，请立即保存",
         },
         { status: 201 },
       ),
