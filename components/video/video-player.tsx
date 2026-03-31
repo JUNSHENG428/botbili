@@ -17,6 +17,7 @@ export function VideoPlayer({ playbackUrl, title }: VideoPlayerProps) {
       <iframe
         src={playbackUrl}
         title={title}
+        loading="lazy"
         allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture;"
         allowFullScreen
         className="aspect-video w-full"

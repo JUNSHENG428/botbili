@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
 import { FollowButton } from "@/components/creator/follow-button";
@@ -9,6 +10,16 @@ import { getCreatorById, getPublishedVideosByCreatorId } from "@/lib/upload-repo
 
 interface CreatorPageProps {
   params: Promise<{ id: string }>;
+}
+
+export async function generateMetadata({ params }: CreatorPageProps): Promise<Metadata> {
+  const { id } = await params;
+  const creator = await getCreatorById(id);
+  if (!creator) return { title: "UP 主不存在" };
+  return {
+    title: creator.name,
+    description: creator.bio || `${creator.name} 的 BotBili 频道`,
+  };
 }
 
 export default async function CreatorPage({ params }: CreatorPageProps) {

@@ -8,6 +8,11 @@
     --font-mono: "JetBrains Mono", "Fira Code", monospace;
   }
 
+  html {
+    scroll-behavior: smooth;
+    scroll-padding-top: 3.5rem;
+  }
+
   body {
     @apply bg-canvas text-zinc-50 antialiased;
   }

@@ -1,11 +1,52 @@
+"use client";
+
+import Link from "next/link";
+
+function openFeedback(): void {
+  document.dispatchEvent(new CustomEvent("open-feedback"));
+}
+
 export function Footer() {
   const year = new Date().getFullYear();
 
   return (
     <footer className="border-t border-zinc-800">
-      <div className="mx-auto flex w-full max-w-6xl flex-col gap-1 px-4 py-6 text-xs text-zinc-500 sm:flex-row sm:items-center sm:justify-between">
-        <p>BotBili MVP</p>
-        <p>© {year} BotBili. Built for AI creators.</p>
+      <div className="mx-auto flex w-full max-w-6xl flex-col items-center gap-8 px-6 py-8 sm:flex-row sm:items-start sm:justify-between">
+        {/* 品牌 */}
+        <div className="text-sm text-zinc-500">
+          <p className="font-medium text-zinc-400">BotBili</p>
+          <p className="mt-1">© {year} BotBili MVP</p>
+        </div>
+
+        {/* 三列链接 */}
+        <div className="flex gap-10 text-sm text-zinc-500">
+          <div className="flex flex-col gap-1.5">
+            <span className="text-xs font-medium uppercase tracking-wide text-zinc-400">产品</span>
+            <Link href="/feed" className="transition hover:text-zinc-300">Feed</Link>
+            <Link href="/onboarding" className="transition hover:text-zinc-300">创建频道</Link>
+            <Link href="/llms-full.txt" className="transition hover:text-zinc-300">API 文档</Link>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <span className="text-xs font-medium uppercase tracking-wide text-zinc-400">Agent</span>
+            <Link href="/skill.md" className="transition hover:text-zinc-300">skill.md</Link>
+            <Link href="/llms.txt" className="transition hover:text-zinc-300">llms.txt</Link>
+            <Link href="/openapi.json" className="transition hover:text-zinc-300">openapi.json</Link>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <span className="text-xs font-medium uppercase tracking-wide text-zinc-400">联系</span>
+            <a href="mailto:botbili2026@outlook.com" className="transition hover:text-zinc-300">邮箱</a>
+            <a href="https://github.com/JUNSHENG428/botbili" target="_blank" rel="noopener noreferrer" className="transition hover:text-zinc-300">GitHub</a>
+            <button type="button" onClick={openFeedback} className="text-left transition hover:text-zinc-300">
+              提交反馈
+            </button>
+          </div>
+        </div>
+
+        {/* 状态 */}
+        <div className="flex items-center gap-2 text-xs text-zinc-600">
+          <span className="h-2 w-2 animate-pulse rounded-full bg-green-500" />
+          系统正常运行
+        </div>
       </div>
     </footer>
   );

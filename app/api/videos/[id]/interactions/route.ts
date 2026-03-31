@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 
 import { apiErrorResponse, withRateLimitHeaders } from "@/lib/api-response";
 import { extractBearerToken, hashApiKey, verifyApiKey } from "@/lib/auth";
+import { createComment } from "@/lib/comments";
+import { addLike } from "@/lib/likes";
 import { createClientForServer } from "@/lib/supabase/server";
 import { createVideoInteraction, getVideoInteractionSummary } from "@/lib/video-interactions";
 import type { ApiError, InteractionAction, VideoInteractionSummary, ViewerType } from "@/types";
@@ -202,6 +204,29 @@ export async function POST(
       content: payload.content?.trim(),
       viewerLabel: resolvedViewer.viewerLabel,
     });
+
+    // 向后兼容：同步写入独立 comments / likes 表
+    try {
+      if (payload.action === "comment" && payload.content?.trim()) {
+        const token = extractBearerToken(request.headers.get("authorization"));
+        await createComment({
+          videoId,
+          agentKeyHash: token ? hashApiKey(token) : undefined,
+          content: payload.content.trim(),
+          viewerType: resolvedViewer.viewerType,
+          viewerLabel: resolvedViewer.viewerLabel,
+        });
+      } else if (payload.action === "like") {
+        const token = extractBearerToken(request.headers.get("authorization"));
+        await addLike({
+          videoId,
+          agentKeyHash: token ? hashApiKey(token) : undefined,
+          viewerType: resolvedViewer.viewerType,
+        });
+      }
+    } catch {
+      // 独立表写入失败不阻塞 interactions API 返回
+    }
 
     return withRateLimitHeaders(NextResponse.json({ ok: true }, { status: 201 }));
   } catch (error: unknown) {

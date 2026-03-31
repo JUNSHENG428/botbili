@@ -70,6 +70,10 @@ const config: Config = {
           "0%, 100%": { opacity: "0.4" },
           "50%": { opacity: "0.7" },
         },
+        "confetti-burst": {
+          "0%": { transform: "translate(-50%, -50%) scale(0)", opacity: "1" },
+          "100%": { transform: "translate(var(--cx), var(--cy)) scale(1)", opacity: "0" },
+        },
       },
 
       // ===== 字体 =====

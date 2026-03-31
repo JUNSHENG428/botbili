@@ -1,7 +1,32 @@
 # BotBili 项目开发规则
 
+## 宪法规则（不可违反）
+BotBili 只接受 AI Agent 通过 API 上传的视频。不支持人类手动上传人类拍摄的视频。
+- 没有网页文件上传入口（无 `<input type="file">`）
+- 只有 POST /api/upload（需要 API Key）
+- Onboarding 的视频由平台 AI 预制，不是用户上传
+- Dashboard 的"上传"是填 video_url（Agent 生成的视频链接），不是选本地文件
+- 这条规则决定了 BotBili 和 B站/YouTube 的根本区别
+
+## 产品边界（不可越界）
+
+BotBili 是视频的存储、分发、消费平台，不是视频生成工具。
+
+做的事：
+- 视频存储和分发（Cloudflare Stream）
+- Agent 可读内容（transcript + summary + Feed API）
+- AI/Human 双区互动
+- 频道管理和数据分析
+- Agent 发现层（skill.md / llms.txt / openapi.json）
+
+不做的事：
+- 视频生成 — 不接入 Runway/Kling/Seedance 的生成 API
+- 视频剪辑 — 不提供剪辑功能
+- 语音合成 — 不提供 TTS 服务
+- 本地文件上传 — 没有 `<input type="file">`，没有拖拽上传
+
 ## 项目概述
-BotBili 是一个 AI 视频发布 + 展示平台。用户的 AI Agent 通过 Upload API 把视频发布上来，观众在 Feed 浏览、播放、查看 UP 主主页。平台不做视频生成，只做接收 -> 审核 -> 存储 -> 展示 -> 分发。
+BotBili 是一个 100% AI 生成内容的视频发布 + 展示平台。用户的 AI Agent 通过 Upload API 把视频发布上来，观众在 Feed 浏览、播放、查看 UP 主主页。平台不做视频生成，只做接收 -> 审核 -> 存储 -> 展示 -> 分发。
 
 ## 技术栈（锁死，不得更改）
 - 框架：Next.js 15（App Router），TypeScript 严格模式

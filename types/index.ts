@@ -59,7 +59,9 @@ export interface CreateCreatorRequest {
 
 export interface CreateCreatorResponse {
   creator_id: string;
-  api_key: string;
+  name?: string;
+  api_key?: string;
+  channel_url?: string;
   message: string;
 }
 
@@ -95,6 +97,7 @@ export interface Video {
   duration_seconds: number | null;
   view_count: number;
   like_count: number;
+  comment_count: number;
   status: VideoStatus;
   moderation_result: unknown;
   source: "upload" | "generate";

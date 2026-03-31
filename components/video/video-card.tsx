@@ -39,7 +39,7 @@ export function VideoCard({ video, className }: VideoCardProps) {
             暂无封面
           </div>
         )}
-        <span className="absolute bottom-2 right-2 rounded bg-black/70 px-1.5 py-0.5 text-[11px] text-zinc-100">
+        <span className="absolute bottom-2 right-2 rounded bg-zinc-950/70 px-1.5 py-0.5 text-[11px] text-zinc-100">
           {formatDuration(durationSeconds)}
         </span>
       </div>

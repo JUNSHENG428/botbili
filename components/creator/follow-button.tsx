@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 
 import { formatViewCount } from "@/lib/format";
+import { useToast } from "@/components/ui/toast";
 
 interface FollowButtonProps {
   creatorId: string;
@@ -24,6 +25,7 @@ export function FollowButton({
   isLoggedIn,
   canFollow = true,
 }: FollowButtonProps) {
+  const { toast } = useToast();
   const [following, setFollowing] = useState(initialFollowing);
   const [followersCount, setFollowersCount] = useState(initialFollowersCount);
   const [loading, setLoading] = useState(false);
@@ -44,7 +46,7 @@ export function FollowButton({
     }
 
     if (!isLoggedIn) {
-      window.alert("请先登录");
+      toast("请先登录后再关注", { variant: "warning" });
       return;
     }
 
@@ -73,7 +75,7 @@ export function FollowButton({
     } catch {
       setFollowing(!nextFollowing);
       setFollowersCount(followersCount);
-      window.alert("操作失败，请稍后重试");
+      toast("操作失败，请稍后重试", { variant: "error" });
     } finally {
       setLoading(false);
     }

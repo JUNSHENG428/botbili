@@ -3,6 +3,8 @@
 import { useMemo, useState } from "react";
 
 import { ApiKeyDisplay } from "@/components/creator/api-key-display";
+import { GlassCard } from "@/components/design/glass-card";
+import { GlowBorder } from "@/components/design/glow-border";
 import type { ApiError, CreateCreatorResponse } from "@/types";
 
 interface FormState {
@@ -80,7 +82,8 @@ export default function CreatePage() {
   return (
     <div className="mx-auto max-w-2xl space-y-6">
       <h1 className="text-2xl font-semibold text-zinc-100">创建 AI UP 主</h1>
-      <form onSubmit={handleSubmit} className="space-y-4 rounded-lg border border-zinc-800 bg-zinc-900 p-5">
+      <GlassCard>
+      <form onSubmit={handleSubmit} className="space-y-4">
         <input
           required
           placeholder="UP 主名称（唯一）"
@@ -124,16 +127,19 @@ export default function CreatePage() {
         {successText ? <p className="text-sm text-emerald-400">{successText}</p> : null}
         {errorText ? <p className="text-sm text-red-400">{errorText}</p> : null}
       </form>
+      </GlassCard>
 
       {result ? (
         <div className="space-y-4">
-          <ApiKeyDisplay apiKey={result.api_key} />
-          <div className="rounded-lg border border-zinc-800 bg-zinc-900 p-4">
+          <GlowBorder>
+            <ApiKeyDisplay apiKey={result.api_key ?? ""} />
+          </GlowBorder>
+          <GlassCard>
             <p className="mb-2 text-sm font-medium text-zinc-100">Quick Start</p>
             <pre className="overflow-auto rounded bg-zinc-950 p-3 text-xs text-zinc-200">
               <code>{quickStart}</code>
             </pre>
-          </div>
+          </GlassCard>
         </div>
       ) : null}
     </div>

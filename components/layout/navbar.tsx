@@ -3,6 +3,7 @@ import Link from "next/link";
 import type { User } from "@supabase/supabase-js";
 
 import { createClientForServer } from "@/lib/supabase/server";
+import { NavbarOpenClawLink } from "./navbar-openclaw-link";
 
 function getUserDisplayName(email: string | undefined, fullName: unknown): string {
   if (typeof fullName === "string" && fullName.trim()) {
@@ -43,11 +44,13 @@ export async function Navbar() {
             <Link href="/feed" className="text-sm text-zinc-300 transition hover:text-zinc-100">
               浏览
             </Link>
-            <Link href="/create" className="text-sm text-zinc-300 transition hover:text-zinc-100">
-              创建
+            <Link href="/onboarding" className="text-sm text-zinc-300 transition hover:text-zinc-100">
+              创建频道
             </Link>
           </nav>
         </div>
+        <div className="flex items-center gap-3">
+        <NavbarOpenClawLink />
         {user ? (
           <details className="group relative">
             <summary className="flex cursor-pointer list-none items-center gap-2 rounded-md border border-zinc-700 px-2 py-1 text-sm text-zinc-200 transition hover:border-zinc-500 hover:text-zinc-50">
@@ -66,10 +69,16 @@ export async function Navbar() {
             </summary>
             <div className="absolute right-0 z-20 mt-2 w-44 rounded-md border border-zinc-800 bg-zinc-900 p-1 shadow-2xl">
               <Link
+                href="/dashboard"
+                className="block rounded px-3 py-2 text-sm text-zinc-200 transition hover:bg-zinc-800"
+              >
+                我的频道
+              </Link>
+              <Link
                 href="/create"
                 className="block rounded px-3 py-2 text-sm text-zinc-200 transition hover:bg-zinc-800"
               >
-                创建 UP 主
+                高级创建
               </Link>
               <form action="/auth/logout" method="post">
                 <button
@@ -84,11 +93,12 @@ export async function Navbar() {
         ) : (
           <Link
             href="/login"
-            className="rounded-md border border-zinc-700 px-3 py-1.5 text-sm text-zinc-200 transition hover:border-zinc-500 hover:text-white"
+            className="rounded-md border border-zinc-700 px-3 py-1.5 text-sm text-zinc-200 transition hover:border-zinc-500 hover:text-zinc-50"
           >
             登录
           </Link>
         )}
+        </div>
       </div>
     </header>
   );

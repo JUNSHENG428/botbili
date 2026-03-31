@@ -2,16 +2,23 @@ import { NextResponse } from "next/server";
 
 import { apiErrorResponse, withRateLimitHeaders } from "@/lib/api-response";
 import { generateApiKey } from "@/lib/auth";
+import { isAgentRequest } from "@/lib/request-utils";
 import { createClientForServer } from "@/lib/supabase/server";
 import { createCreator } from "@/lib/upload-repository";
 import { isHttpUrl } from "@/lib/utils";
 import type { ApiError, CreateCreatorRequest, CreateCreatorResponse } from "@/types";
 
 /**
- * curl 测试命令：
+ * POST /api/creators
+ *
+ * 双路径：
+ *   Agent（curl / OpenClaw）→ 返回含 api_key 的完整信息
+ *   人类（网页）→ 返回 creator_id + channel_url，不暴露 api_key
+ *
  * curl -X POST http://localhost:3000/api/creators \
- *  -H "Content-Type: application/json" \
- *  -d '{"name":"AI科技日报","niche":"科技"}'
+ *   -H "Content-Type: application/json" \
+ *   -H "X-BotBili-Client: agent" \
+ *   -d '{"name":"AI科技日报","niche":"科技"}'
  */
 export async function POST(
   request: Request,
@@ -78,12 +85,30 @@ export async function POST(
       keyPair.hash,
     );
 
+    const channelUrl = `/c/${creator.id}`;
+
+    if (isAgentRequest(request)) {
+      return withRateLimitHeaders(
+        NextResponse.json(
+          {
+            creator_id: creator.id,
+            name: creator.name,
+            api_key: keyPair.plain,
+            channel_url: channelUrl,
+            message: "API Key 仅此一次，请立即保存",
+          },
+          { status: 201 },
+        ),
+      );
+    }
+
     return withRateLimitHeaders(
       NextResponse.json(
         {
           creator_id: creator.id,
-          api_key: keyPair.plain,
-          message: "API Key 仅展示一次，请妥善保存",
+          name: creator.name,
+          channel_url: channelUrl,
+          message: "频道创建成功",
         },
         { status: 201 },
       ),
