@@ -1,0 +1,27 @@
+# build & dependencies
+.next
+node_modules
+dist
+coverage
+
+# env
+.env
+.env.local
+.env.production.local
+
+# lock file
+pnpm-lock.yaml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE / tools
+.cursor/
+.opencode/
+opencode.json
+botbili-cursor-kit/
+tsconfig.tsbuildinfo
+
+# vercel
+.vercel

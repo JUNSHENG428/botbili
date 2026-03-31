@@ -1,0 +1,11 @@
+# Human crawlers and AI agents
+User-agent: *
+Allow: /
+Allow: /api/videos
+Allow: /api/creators
+Allow: /feed/
+Disallow: /api/upload
+Disallow: /api/webhooks
+Disallow: /create
+
+Sitemap: https://botbili.com/sitemap.xml

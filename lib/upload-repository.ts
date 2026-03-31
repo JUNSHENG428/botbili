@@ -1,0 +1,389 @@
+import { getSupabaseAdminClient } from "@/lib/supabase/server";
+import type {
+  CreateCreatorRequest,
+  Creator,
+  UploadRequest,
+  VideoInsert,
+  VideoRecord,
+  VideoWithCreator,
+  VideoWithCreatorWithoutTranscript,
+  VideoStatus,
+} from "@/types";
+
+interface QuotaSnapshot {
+  uploads_this_month: number;
+  upload_quota: number;
+  quota_reset_at: string;
+}
+
+interface CreatorQuotaUpdate {
+  uploads_this_month: number;
+  quota_reset_at: string;
+}
+
+interface PublishedVideosQueryRow extends VideoRecord {
+  creator: {
+    id: string;
+    name: string;
+    avatar_url: string | null;
+    niche: string;
+  };
+}
+
+type PublishedVideosQueryRowWithoutTranscript = Omit<PublishedVideosQueryRow, "transcript">;
+
+interface GetPublishedVideosOptionsWithTranscript {
+  includeTranscript: true;
+}
+
+interface GetPublishedVideosOptionsWithoutTranscript {
+  includeTranscript?: false;
+}
+
+function getNextMonthStartIso(now: Date): string {
+  const next = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1, 0, 0, 0));
+  return next.toISOString();
+}
+
+/**
+ * 根据 API Key 哈希查找 creator。
+ */
+export async function verifyApiKey(keyHash: string): Promise<Creator | null> {
+  const supabase = getSupabaseAdminClient();
+  const { data, error } = await supabase
+    .from("creators")
+    .select("*")
+    .eq("agent_key_hash", keyHash)
+    .maybeSingle<Creator>();
+
+  if (error) {
+    throw new Error(`verifyApiKey failed: ${error.message}`);
+  }
+
+  return data;
+}
+
+async function updateCreatorQuota(creatorId: string, payload: CreatorQuotaUpdate): Promise<void> {
+  const supabase = getSupabaseAdminClient();
+  const { error } = await supabase.from("creators").update(payload).eq("id", creatorId);
+
+  if (error) {
+    throw new Error(`updateCreatorQuota failed: ${error.message}`);
+  }
+}
+
+/**
+ * 检查并递增当月上传配额（到期自动重置）。
+ */
+export async function checkAndIncrementQuota(creatorId: string): Promise<boolean> {
+  const supabase = getSupabaseAdminClient();
+  const { data, error } = await supabase
+    .from("creators")
+    .select("uploads_this_month, upload_quota, quota_reset_at")
+    .eq("id", creatorId)
+    .maybeSingle<QuotaSnapshot>();
+
+  if (error) {
+    throw new Error(`checkAndIncrementQuota query failed: ${error.message}`);
+  }
+
+  if (!data) {
+    throw new Error("checkAndIncrementQuota creator not found");
+  }
+
+  const now = new Date();
+  const resetAt = new Date(data.quota_reset_at);
+
+  let uploadsThisMonth = data.uploads_this_month;
+  let quotaResetAt = data.quota_reset_at;
+
+  if (Number.isNaN(resetAt.getTime()) || now >= resetAt) {
+    uploadsThisMonth = 0;
+    quotaResetAt = getNextMonthStartIso(now);
+    await updateCreatorQuota(creatorId, {
+      uploads_this_month: uploadsThisMonth,
+      quota_reset_at: quotaResetAt,
+    });
+  }
+
+  if (uploadsThisMonth >= data.upload_quota) {
+    return false;
+  }
+
+  await updateCreatorQuota(creatorId, {
+    uploads_this_month: uploadsThisMonth + 1,
+    quota_reset_at: quotaResetAt,
+  });
+
+  return true;
+}
+
+/**
+ * 创建上传视频记录，状态固定为 processing。
+ */
+export async function createVideo(
+  creatorId: string,
+  payload: UploadRequest,
+  cloudflareUid: string,
+  playbackUrl: string,
+): Promise<VideoRecord> {
+  const supabase = getSupabaseAdminClient();
+
+  const insertData: VideoInsert = {
+    creator_id: creatorId,
+    title: payload.title,
+    description: payload.description ?? "",
+    tags: payload.tags ?? [],
+    raw_video_url: payload.video_url,
+    thumbnail_url: payload.thumbnail_url ?? null,
+    transcript: payload.transcript ?? null,
+    summary: payload.summary ?? null,
+    language: payload.language ?? "zh-CN",
+    cloudflare_video_id: cloudflareUid,
+    cloudflare_playback_url: playbackUrl,
+    status: "processing",
+    source: "upload",
+  };
+
+  const { data, error } = await supabase
+    .from("videos")
+    .insert(insertData)
+    .select("*")
+    .single<VideoRecord>();
+
+  if (error) {
+    throw new Error(`createVideo failed: ${error.message}`);
+  }
+
+  return data;
+}
+
+/**
+ * 创建 AI UP 主记录（仅存 API Key 哈希）。
+ */
+export async function createCreator(
+  payload: CreateCreatorRequest,
+  apiKeyHash: string,
+): Promise<Creator> {
+  const supabase = getSupabaseAdminClient();
+  const { data, error } = await supabase
+    .from("creators")
+    .insert({
+      owner_email: payload.email,
+      name: payload.name.trim(),
+      niche: payload.niche ?? "",
+      bio: payload.bio ?? "",
+      style: payload.style ?? "",
+      avatar_url: payload.avatar_url ?? null,
+      agent_key_hash: apiKeyHash,
+    })
+    .select("*")
+    .single<Creator>();
+
+  if (error) {
+    throw new Error(`createCreator failed: ${error.message}`);
+  }
+  return data;
+}
+
+/**
+ * 获取公开视频列表（只返回 published）。
+ */
+export async function getPublishedVideos(
+  page: number,
+  pageSize: number,
+  sort: "hot" | "latest",
+  options: GetPublishedVideosOptionsWithTranscript,
+): Promise<{ items: VideoWithCreator[]; total: number; hasMore: boolean }>;
+export async function getPublishedVideos(
+  page: number,
+  pageSize: number,
+  sort: "hot" | "latest",
+  options?: GetPublishedVideosOptionsWithoutTranscript,
+): Promise<{ items: VideoWithCreatorWithoutTranscript[]; total: number; hasMore: boolean }>;
+export async function getPublishedVideos(
+  page: number,
+  pageSize: number,
+  sort: "hot" | "latest",
+  options?: GetPublishedVideosOptionsWithTranscript | GetPublishedVideosOptionsWithoutTranscript,
+): Promise<{ items: VideoWithCreator[] | VideoWithCreatorWithoutTranscript[]; total: number; hasMore: boolean }> {
+  const supabase = getSupabaseAdminClient();
+  const from = (page - 1) * pageSize;
+  const to = from + pageSize - 1;
+  const includeTranscript = options?.includeTranscript === true;
+
+  const orderColumn = sort === "hot" ? "view_count" : "created_at";
+  const { count, error: countError } = await supabase
+    .from("videos")
+    .select("id", { count: "exact", head: true })
+    .eq("status", "published");
+
+  if (countError) {
+    throw new Error(`getPublishedVideos count failed: ${countError.message}`);
+  }
+
+  let items: VideoWithCreator[] | VideoWithCreatorWithoutTranscript[];
+  if (includeTranscript) {
+    const { data, error } = await supabase
+      .from("videos")
+      .select(
+        "id, creator_id, title, description, tags, raw_video_url, thumbnail_url, transcript, summary, language, cloudflare_video_id, cloudflare_playback_url, duration_seconds, view_count, like_count, status, moderation_result, source, created_at, updated_at, creator:creators!videos_creator_id_fkey(id, name, avatar_url, niche)",
+      )
+      .eq("status", "published")
+      .order(orderColumn, { ascending: false })
+      .range(from, to)
+      .returns<PublishedVideosQueryRow[]>();
+
+    if (error) {
+      throw new Error(`getPublishedVideos failed: ${error.message}`);
+    }
+
+    items = (data ?? []).map((item) => ({
+      ...item,
+      creator: {
+        id: item.creator.id,
+        name: item.creator.name,
+        avatar_url: item.creator.avatar_url,
+        niche: item.creator.niche,
+      },
+    }));
+  } else {
+    const { data, error } = await supabase
+      .from("videos")
+      .select(
+        "id, creator_id, title, description, tags, raw_video_url, thumbnail_url, summary, language, cloudflare_video_id, cloudflare_playback_url, duration_seconds, view_count, like_count, status, moderation_result, source, created_at, updated_at, creator:creators!videos_creator_id_fkey(id, name, avatar_url, niche)",
+      )
+      .eq("status", "published")
+      .order(orderColumn, { ascending: false })
+      .range(from, to)
+      .returns<PublishedVideosQueryRowWithoutTranscript[]>();
+
+    if (error) {
+      throw new Error(`getPublishedVideos failed: ${error.message}`);
+    }
+
+    items = (data ?? []).map((item) => ({
+      ...item,
+      creator: {
+        id: item.creator.id,
+        name: item.creator.name,
+        avatar_url: item.creator.avatar_url,
+        niche: item.creator.niche,
+      },
+    }));
+  }
+  const total = count ?? 0;
+  const hasMore = from + items.length < total;
+  return { items, total, hasMore };
+}
+
+/**
+ * 根据视频 id 获取详情，并原子递增 view_count。
+ */
+export async function getVideoById(videoId: string): Promise<VideoWithCreator | null> {
+  const supabase = getSupabaseAdminClient();
+  const { data: rawVideo, error: videoError } = await supabase
+    .from("videos")
+    .select(
+      "*, creator:creators!videos_creator_id_fkey(id, name, avatar_url, niche)",
+    )
+    .eq("id", videoId)
+    .eq("status", "published")
+    .maybeSingle<PublishedVideosQueryRow>();
+
+  if (videoError) {
+    throw new Error(`getVideoById failed: ${videoError.message}`);
+  }
+  if (!rawVideo) {
+    return null;
+  }
+
+  const nextViewCount = rawVideo.view_count + 1;
+  const { error: updateError } = await supabase
+    .from("videos")
+    .update({ view_count: nextViewCount })
+    .eq("id", videoId);
+
+  if (updateError) {
+    throw new Error(`increment view_count failed: ${updateError.message}`);
+  }
+
+  return {
+    ...rawVideo,
+    view_count: nextViewCount,
+    creator: {
+      id: rawVideo.creator.id,
+      name: rawVideo.creator.name,
+      avatar_url: rawVideo.creator.avatar_url,
+      niche: rawVideo.creator.niche,
+    },
+  };
+}
+
+/**
+ * 获取 UP 主信息。
+ */
+export async function getCreatorById(creatorId: string): Promise<Creator | null> {
+  const supabase = getSupabaseAdminClient();
+  const { data, error } = await supabase
+    .from("creators")
+    .select("*")
+    .eq("id", creatorId)
+    .maybeSingle<Creator>();
+
+  if (error) {
+    throw new Error(`getCreatorById failed: ${error.message}`);
+  }
+  return data;
+}
+
+/**
+ * 获取某个 UP 主已发布视频列表。
+ */
+export async function getPublishedVideosByCreatorId(creatorId: string): Promise<VideoRecord[]> {
+  const supabase = getSupabaseAdminClient();
+  const { data, error } = await supabase
+    .from("videos")
+    .select("*")
+    .eq("creator_id", creatorId)
+    .eq("status", "published")
+    .order("created_at", { ascending: false })
+    .returns<VideoRecord[]>();
+
+  if (error) {
+    throw new Error(`getPublishedVideosByCreatorId failed: ${error.message}`);
+  }
+  return data ?? [];
+}
+
+/**
+ * 更新 Cloudflare 回调后的状态和元数据。
+ */
+export async function updateVideoStatus(
+  cloudflareUid: string,
+  status: VideoStatus,
+  extras: { durationSeconds?: number | null; thumbnailUrl?: string | null } = {},
+): Promise<void> {
+  const supabase = getSupabaseAdminClient();
+  const payload: {
+    status: VideoStatus;
+    duration_seconds?: number | null;
+    thumbnail_url?: string | null;
+  } = { status };
+
+  if (extras.durationSeconds !== undefined) {
+    payload.duration_seconds = extras.durationSeconds;
+  }
+  if (extras.thumbnailUrl !== undefined) {
+    payload.thumbnail_url = extras.thumbnailUrl;
+  }
+
+  const { error } = await supabase
+    .from("videos")
+    .update(payload)
+    .eq("cloudflare_video_id", cloudflareUid);
+
+  if (error) {
+    throw new Error(`updateVideoStatus failed: ${error.message}`);
+  }
+}

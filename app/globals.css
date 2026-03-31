@@ -1,0 +1,68 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --font-inter: "Inter", system-ui, sans-serif;
+    --font-mono: "JetBrains Mono", "Fira Code", monospace;
+  }
+
+  body {
+    @apply bg-canvas text-zinc-50 antialiased;
+  }
+
+  /* 全局滚动条 */
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 3px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.2);
+  }
+}
+
+/* ===== 可复用的设计 Token 类 ===== */
+@layer components {
+  /* 毛玻璃容器 */
+  .glass {
+    @apply bg-surface backdrop-blur-xl 
+      border border-border-subtle 
+      rounded-card;
+  }
+  .glass-hover {
+    @apply hover:bg-surface-hover 
+      hover:border-border 
+      transition-all duration-300;
+  }
+
+  /* 极光渐变边框（用在高亮卡片外层） */
+  .aurora-border {
+    @apply relative;
+  }
+  .aurora-border::before {
+    content: "";
+    @apply absolute -inset-px rounded-card 
+      bg-aurora opacity-0 
+      transition-opacity duration-500;
+  }
+  .aurora-border:hover::before {
+    @apply opacity-100;
+  }
+
+  /* 文字渐变（用在标题强调） */
+  .text-aurora {
+    @apply bg-aurora bg-clip-text text-transparent;
+  }
+}
+
+/* 无障碍：尊重用户动效偏好 */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
