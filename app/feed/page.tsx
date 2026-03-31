@@ -33,7 +33,8 @@ interface FeedResult {
 }
 
 async function fetchVideos(sort: "hot" | "latest", page: number): Promise<FeedResult> {
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+  const { getBaseUrl } = await import("@/lib/utils");
+  const appUrl = getBaseUrl();
   const response = await fetch(`${appUrl}/api/videos?sort=${sort}&page=${page}&page_size=12`, {
     next: { revalidate: 60 },
   });

@@ -228,13 +228,8 @@ export async function POST(request: NextRequest): Promise<NextResponse<ApiError 
       cloudflareResult.playbackUrl,
     );
 
-    const appUrl = process.env.APP_URL ?? process.env.NEXT_PUBLIC_APP_URL;
-    if (!appUrl) {
-      return errorResponse("Server configuration error", "INTERNAL_ERROR", 500, {
-        remaining: hourlyLimit.remaining,
-        resetAtUnix: hourlyLimit.resetAtUnix,
-      });
-    }
+    const { getBaseUrl } = await import("@/lib/utils");
+    const appUrl = getBaseUrl();
 
     const videoUrl = `${appUrl}/v/${createdVideo.id}`;
     if (uploadPayload.idempotency_key) {

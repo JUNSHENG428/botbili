@@ -1,9 +1,10 @@
 import { createServerClient } from "@supabase/ssr";
+import type { User } from "@supabase/supabase-js";
 import { NextResponse, type NextRequest } from "next/server";
 
 interface SessionUpdateResult {
-  response: NextResponse;
-  userId: string | null;
+  supabaseResponse: NextResponse;
+  user: User | null;
 }
 
 function getRequiredEnv(name: string): string {
@@ -15,7 +16,7 @@ function getRequiredEnv(name: string): string {
 }
 
 export async function updateSession(request: NextRequest): Promise<SessionUpdateResult> {
-  let response = NextResponse.next({ request });
+  let supabaseResponse = NextResponse.next({ request });
 
   const supabase = createServerClient(
     getRequiredEnv("NEXT_PUBLIC_SUPABASE_URL"),
@@ -28,8 +29,10 @@ export async function updateSession(request: NextRequest): Promise<SessionUpdate
         setAll(cookiesToSet) {
           cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
 
-          response = NextResponse.next({ request });
-          cookiesToSet.forEach(({ name, value, options }) => response.cookies.set(name, value, options));
+          supabaseResponse = NextResponse.next({ request });
+          cookiesToSet.forEach(({ name, value, options }) =>
+            supabaseResponse.cookies.set(name, value, options),
+          );
         },
       },
     },
@@ -40,7 +43,7 @@ export async function updateSession(request: NextRequest): Promise<SessionUpdate
   } = await supabase.auth.getUser();
 
   return {
-    response,
-    userId: user?.id ?? null,
+    supabaseResponse,
+    user: user ?? null,
   };
 }

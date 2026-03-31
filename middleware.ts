@@ -1,68 +1,37 @@
-import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-const INVITE_PROTECTED = ["/create", "/dashboard", "/onboarding"];
+import { updateSession } from "@/lib/supabase/middleware";
 
-function getEnv(name: string): string {
-  const value = process.env[name];
-  if (!value) throw new Error(`Missing required env: ${name}`);
-  return value;
-}
+const AUTH_ROUTES = ["/create", "/dashboard", "/settings"];
+const INVITE_ROUTES = ["/create", "/dashboard"];
 
 export async function middleware(request: NextRequest): Promise<NextResponse> {
-  let response = NextResponse.next({ request });
-
-  const supabase = createServerClient(
-    getEnv("NEXT_PUBLIC_SUPABASE_URL"),
-    getEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY"),
-    {
-      cookies: {
-        getAll() {
-          return request.cookies.getAll();
-        },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
-          response = NextResponse.next({ request });
-          cookiesToSet.forEach(({ name, value, options }) =>
-            response.cookies.set(name, value, options),
-          );
-        },
-      },
-    },
-  );
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { supabaseResponse, user } = await updateSession(request);
 
   const pathname = request.nextUrl.pathname;
-  const needsInvite = INVITE_PROTECTED.some((p) => pathname.startsWith(p));
 
-  if (needsInvite && !user) {
+  if (user && pathname === "/login") {
+    return NextResponse.redirect(new URL("/feed", request.url));
+  }
+
+  const needsAuth = AUTH_ROUTES.some((route) => pathname.startsWith(route));
+  if (!user && needsAuth) {
     const loginUrl = request.nextUrl.clone();
     loginUrl.pathname = "/login";
     loginUrl.searchParams.set("next", pathname);
     return NextResponse.redirect(loginUrl);
   }
 
-  if (needsInvite && user) {
-    const { data: usage } = await supabase
-      .from("invite_code_usage")
-      .select("id")
-      .eq("user_id", user.id)
-      .limit(1)
-      .maybeSingle();
-
-    if (!usage && pathname !== "/invite") {
-      const inviteUrl = request.nextUrl.clone();
-      inviteUrl.pathname = "/invite";
-      return NextResponse.redirect(inviteUrl);
-    }
+  const needsInvite = INVITE_ROUTES.some((route) => pathname.startsWith(route));
+  if (user && needsInvite) {
+    // TODO: 接入邀请码系统后，在这里校验 invite_code_usage。
   }
 
-  return response;
+  return supabaseResponse;
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|txt|json|xml|md)$).*)"],
+  matcher: [
+    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|txt|json|md)$).*)",
+  ],
 };

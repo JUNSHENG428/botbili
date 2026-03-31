@@ -61,7 +61,8 @@ export async function GET(
       });
     }
 
-    const appUrl = process.env.APP_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+    const { getBaseUrl } = await import("@/lib/utils");
+    const appUrl = getBaseUrl();
     const videos = await getPublishedVideosByCreatorId(creator.id);
     const items: JsonFeedItem[] = videos.map((video) => ({
       id: video.id,

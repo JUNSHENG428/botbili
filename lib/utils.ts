@@ -48,3 +48,12 @@ export function buildApiErrorWithMeta(
 export function cn(...inputs: ClassValue[]): string {
   return twMerge(clsx(inputs));
 }
+
+/**
+ * 获取应用的基础 URL，优先使用 Vercel 自动注入的 VERCEL_URL。
+ */
+export function getBaseUrl(): string {
+  if (process.env.NEXT_PUBLIC_APP_URL) return process.env.NEXT_PUBLIC_APP_URL;
+  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
+  return "http://localhost:3000";
+}

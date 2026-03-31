@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 
 import { createServerClient } from "@supabase/ssr";
-import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { createClient as createSupabaseClient, type SupabaseClient } from "@supabase/supabase-js";
 
 let cachedAdminClient: SupabaseClient | null = null;
 
@@ -40,6 +40,13 @@ export async function createClientForServer(): Promise<SupabaseClient> {
 }
 
 /**
+ * 兼容命名：createClient = 用户态服务端 client。
+ */
+export async function createClient(): Promise<SupabaseClient> {
+  return createClientForServer();
+}
+
+/**
  * 创建服务端 Admin Client（仅服务端调用，绕过 RLS）。
  */
 export function createAdminClient(): SupabaseClient {
@@ -49,7 +56,7 @@ export function createAdminClient(): SupabaseClient {
 
   const url = getRequiredEnv("NEXT_PUBLIC_SUPABASE_URL");
   const serviceRoleKey = getRequiredEnv("SUPABASE_SERVICE_ROLE_KEY");
-  cachedAdminClient = createClient(url, serviceRoleKey, {
+  cachedAdminClient = createSupabaseClient(url, serviceRoleKey, {
     auth: {
       autoRefreshToken: false,
       persistSession: false,

@@ -33,7 +33,8 @@ interface VideosApiResponse {
 
 async function fetchHeroVideos(): Promise<VideoWithCreator[]> {
   try {
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+    const { getBaseUrl } = await import("@/lib/utils");
+    const appUrl = getBaseUrl();
     const res = await fetch(`${appUrl}/api/videos?sort=hot&page=1&page_size=3`, {
       next: { revalidate: 120 },
     });
