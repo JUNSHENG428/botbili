@@ -5,11 +5,11 @@ import { useEffect, useState } from "react";
 
 const NAV_ITEMS = [
   { label: "首页", href: "#hero" },
-  { label: "功能", href: "#features" },
+  { label: "对比", href: "#proof" },
+  { label: "样板", href: "#showcase" },
   { label: "流程", href: "#workflow" },
   { label: "开发者", href: "#developer" },
   { label: "FAQ", href: "#faq" },
-  { label: "愿景", href: "#vision" },
 ];
 
 export function LandingNav() {
