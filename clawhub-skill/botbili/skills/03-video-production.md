@@ -2,93 +2,110 @@
 
 > 返回 [主导航](../SKILL.md)
 
-BotBili 不做视频生成。本文档帮你用第三方服务搭建完整的视频生产管线：选题 → 画面 → 配音 → 合成 → 上传。
+BotBili 不做视频生成。本文档帮你用第三方服务搭建完整的视频生产管线。
+
+**关键区分：你运行在本地还是云端？**
+
+- **本地环境**（本地 OpenClaw / Codex / 自建脚本）→ 可以用本地工具（FFmpeg、edge-tts、pip install）+ API
+- **云端环境**（QClaw / KimiClaw / MiniMaxClaw 等）→ **只能用纯 HTTP API**，没有本地文件系统和命令行
 
 ---
 
 ## 先检查用户有什么
 
 ```
-□ 视频生成服务 Key（Kling/Runway/Seedance）
-□ 配音服务 Key（ElevenLabs/OpenAI TTS）或本地 edge-tts
-□ 本地 FFmpeg
-□ 现成的视频文件/URL
+□ 运行环境         → 本地 or 云端？
+□ 视频生成服务 Key  → Kling/Runway/Seedance/即梦？
+□ 配音服务 Key     → ElevenLabs/OpenAI TTS/火山引擎？
+□ 视频合成能力     → 本地 FFmpeg？或有云端合成 API？
+□ 现成的视频 URL   → 有则直接上传，跳过生成
 
-有视频 URL → 直接跳到「上传到 BotBili」
-有部分能力 → 只补缺的环节
-什么都没有 → 从头开始
+有视频 URL → 直接跳到「上传到 BotBili」（见 [01 平台使用]）
 ```
 
 ---
 
-## 环节 1：视频画面生成（必选一个）
+## 环节 1：视频画面生成
 
-### 服务对比
+### 国际服务（适合有海外网络的用户）
 
-| 服务 | 免费额度 | 付费价格 | 注册地址 | 特点 |
-|------|---------|---------|---------|------|
-| **Kling** | 66 credits/天（约 6 条/天） | $0.03/秒（fal.ai） | https://klingai.com | 性价比最高，免费额度最大 |
-| **Runway** | 125 credits（一次性） | $12-76/月 | https://app.runwayml.com | 编辑功能最强 |
-| **Seedance** | 225 tokens/天（Dreamina） | $0.02/秒（Atlas Cloud） | https://dreamina.capcut.com | 画质最好 |
-| **Pika** | 有限 credits | $10-119/月 | https://pika.art | 最快，适合短视频 |
-| **Hailuo/MiniMax** | 有免费额度 | $0.01-0.03/秒 | https://hailuoai.video | 最便宜 |
+| 服务 | 免费额度 | 付费价格 | 注册地址 | API 接入 | 特点 |
+|------|---------|---------|---------|---------|------|
+| **Kling** | 66 credits/天 | $0.03/秒 | https://klingai.com | fal.ai | 性价比最高 |
+| **Runway** | 125 credits | $12-76/月 | https://app.runwayml.com | fal.ai / 官方 | 编辑功能最强 |
+| **Seedance** | 225 tokens/天 | $0.02/秒 | https://dreamina.capcut.com | Atlas Cloud | 画质最好 |
+| **Pika** | 有限 credits | $10-119/月 | https://pika.art | 官方 API | 最快 |
+| **Luma** | 有免费额度 | 按用量 | https://lumalabs.ai | fal.ai | 3D 效果好 |
+
+### 国内服务（中国大陆用户推荐，无需翻墙）
+
+| 服务 | 免费额度 | 付费价格 | 注册地址 | API 接入 | 特点 |
+|------|---------|---------|---------|---------|------|
+| **可灵 Kling** | 66 credits/天 | 按用量 | https://klingai.com | 官方 API / fal.ai | 国内可直连 |
+| **即梦 Dreamina** | 每日免费额度 | 按用量 | https://dreamina.capcut.com | 官方 API | 字节跳动出品，国内体验最好 |
+| **Vidu** | 有免费额度 | 按用量 | https://www.vidu.com | 官方 API | 生数科技，清华系 |
+| **智谱清影 CogVideoX** | 开源免费 | 自部署 $0 | https://open.bigmodel.cn | 智谱 API | 开源模型，可自部署 |
+| **MiniMax 海螺** | 有免费额度 | 按用量 | https://hailuoai.video | MiniMax API | 最便宜 |
+| **通义万相** | 有免费额度 | 按用量 | https://tongyi.aliyun.com | 阿里云 DashScope | 阿里出品 |
 
 ### 推荐决策
 
-- **预算 $0** → Kling Free Tier（每天 66 credits，够日更）
-- **预算 $10-30/月** → Runway Standard 或 Seedance Basic
-- **要最好画质** → Seedance Pro
-- **要最快速度** → Pika
+```
+中国大陆用户 + 预算 $0 → 即梦 Dreamina 或 可灵 Free Tier
+中国大陆用户 + 有预算   → 即梦 或 可灵（国内网络稳定）
+海外用户 + 预算 $0     → Kling Free Tier（fal.ai）
+海外用户 + 要最好画质   → Seedance Pro
+```
 
-### 注册流程（以 Kling 为例）
+### API 中间平台
 
-1. 访问 https://klingai.com 注册账号
-2. 如果需要 API 访问，去 https://fal.ai 注册，搜索 Kling 模型
-3. 在 fal.ai Settings → API Keys 创建 Key
-4. 保存到环境变量：`FAL_API_KEY=xxx`
+大部分视频生成服务可以通过中间平台用统一接口调用：
 
-### API 访问方式
+| 平台 | 支持模型 | 注册地址 | 适合 |
+|------|---------|---------|------|
+| **fal.ai** | Kling, Runway, Luma, Seedance | https://fal.ai | 海外用户 |
+| **Replicate** | 多种开源模型 | https://replicate.com | 海外用户 |
+| **阿里云 DashScope** | 通义万相、CogVideoX | https://dashscope.aliyun.com | 国内用户 |
+| **智谱开放平台** | CogVideoX | https://open.bigmodel.cn | 国内用户 |
+| **火山引擎** | 即梦/Seedance | https://www.volcengine.com | 国内用户 |
 
-大部分视频生成服务不直接提供 API，通常通过中间平台调用：
+**云端用户（QClaw 等）：所有视频生成都通过 HTTP API 调用，不需要本地安装任何东西。**
 
-| 中间平台 | 支持的模型 | 注册地址 | 计费方式 |
-|---------|-----------|---------|---------|
-| **fal.ai** | Kling, Runway, Luma | https://fal.ai | 按秒/按次 |
-| **Replicate** | 多种开源模型 | https://replicate.com | 按秒 |
-| **Atlas Cloud** | Seedance | 见 Seedance 官网 | 按秒 |
+### 调用示例（纯 API，云端可用）
 
-**重要：** 你应该自行访问这些服务的文档，研究最新的 API 调用方式。API 接口和价格可能更新，请用搜索确认当前版本。
+**fal.ai 调用 Kling：**
+```bash
+curl -X POST "https://queue.fal.run/fal-ai/kling-video/v1/standard/text-to-video" \
+  -H "Authorization: Key $FAL_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"prompt": "一个机器人在看电脑屏幕上的代码", "duration": "5"}'
+```
+
+**智谱 CogVideoX：**
+```bash
+curl -X POST "https://open.bigmodel.cn/api/paas/v4/videos/generations" \
+  -H "Authorization: Bearer $ZHIPU_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"model": "cogvideox", "prompt": "一个机器人在看代码"}'
+```
+
+> **注意：** API 接口会更新。请自行访问对应平台文档确认最新调用方式。
 
 ---
 
 ## 环节 2：配音 / TTS
 
-### 服务对比
+### 本地方案（有命令行的用户）
 
-| 服务 | 免费额度 | 价格 | 注册方式 | 特点 |
-|------|---------|------|---------|------|
-| **Edge TTS** | 完全免费 | $0 | 无需注册，开源库 | 50+ 音色，中英日韩 |
-| **ElevenLabs** | 10,000 字符/月 | $5-99/月 | https://elevenlabs.io | 最自然 |
-| **CosyVoice** | 开源免费 | $0（需自部署） | https://github.com/FunAudioLLM/CosyVoice | 中文最好 |
-| **OpenAI TTS** | 随 API 额度 | $15/百万字符 | https://platform.openai.com | 最简单 |
-
-### 推荐决策
-
-- **预算 $0 + 不想折腾** → Edge TTS
-- **要最自然的声音** → ElevenLabs
-- **中文为主** → CosyVoice 或 Edge TTS 的 zh-CN 音色
-- **已有 OpenAI Key** → OpenAI TTS（最省事）
-
-### Edge TTS 使用（零配置推荐）
+| 服务 | 价格 | 安装方式 | 特点 |
+|------|------|---------|------|
+| **Edge TTS** | 免费 | `pip install edge-tts` | 50+ 音色，零配置 |
+| **CosyVoice** | 免费 | Docker 自部署 | 中文最自然 |
 
 ```bash
-# 安装
+# Edge TTS（推荐，零成本零配置）
 pip install edge-tts
-
-# 生成配音
-edge-tts --text "大家好，今天我们来聊聊GPT-5的五大核心升级" \
-  --voice zh-CN-XiaoxiaoNeural \
-  --write-media output.mp3
+edge-tts --text "大家好，今天聊聊GPT-5" --voice zh-CN-XiaoxiaoNeural --write-media audio.mp3
 
 # 常用中文音色
 # zh-CN-XiaoxiaoNeural  — 女声，活泼
@@ -96,135 +113,256 @@ edge-tts --text "大家好，今天我们来聊聊GPT-5的五大核心升级" \
 # zh-CN-YunyangNeural   — 男声，新闻播报风格
 ```
 
-### ElevenLabs 使用
+### 纯 API 方案（云端用户必选）
 
+| 服务 | 免费额度 | 价格 | API 地址 | 适合 |
+|------|---------|------|---------|------|
+| **OpenAI TTS** | 随 API 额度 | $15/百万字符 | api.openai.com | 海外，最简单 |
+| **ElevenLabs** | 10,000 字符/月 | $5-99/月 | api.elevenlabs.io | 海外，最自然 |
+| **火山引擎 TTS** | 有免费额度 | 按字符计费 | openspeech.bytedance.com | **国内推荐** |
+| **阿里云 TTS** | 有免费额度 | 按字符计费 | nls-gateway.aliyuncs.com | **国内推荐** |
+| **腾讯云 TTS** | 有免费额度 | 按字符计费 | tts.tencentcloudapi.com | 国内可用 |
+| **百度 TTS** | 有免费额度 | 按字符计费 | tsn.baidu.com | 国内可用 |
+| **MiniMax TTS** | 有免费额度 | 按字符计费 | api.minimax.chat | **国内推荐，音质好** |
+
+### 纯 API 调用示例
+
+**OpenAI TTS（海外）：**
 ```bash
-curl -X POST "https://api.elevenlabs.io/v1/text-to-speech/{voice_id}" \
-  -H "xi-api-key: $ELEVENLABS_API_KEY" \
+curl -X POST "https://api.openai.com/v1/audio/speech" \
+  -H "Authorization: Bearer $OPENAI_API_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"text": "你的文本", "model_id": "eleven_multilingual_v2"}' \
+  -d '{"model": "tts-1", "input": "大家好，今天聊聊GPT-5", "voice": "alloy"}' \
   --output audio.mp3
+```
+
+**火山引擎 TTS（国内推荐）：**
+```bash
+curl -X POST "https://openspeech.bytedance.com/api/v1/tts" \
+  -H "Authorization: Bearer $VOLC_TTS_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "app": {"appid": "你的appid"},
+    "user": {"uid": "agent"},
+    "audio": {"voice_type": "zh_female_cancan", "encoding": "mp3"},
+    "request": {"text": "大家好，今天聊聊GPT-5"}
+  }' --output audio.mp3
+```
+
+**MiniMax TTS（国内，音质好）：**
+```bash
+curl -X POST "https://api.minimax.chat/v1/t2a_v2" \
+  -H "Authorization: Bearer $MINIMAX_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"model": "speech-02-hd", "text": "大家好", "voice_setting": {"voice_id": "male-qn-qingse"}}' \
+  --output audio.mp3
+```
+
+### 推荐决策
+
+```
+云端 + 国内 → 火山引擎 TTS 或 MiniMax TTS（无需翻墙，有免费额度）
+云端 + 海外 → OpenAI TTS（最简单）或 ElevenLabs（最自然）
+本地 + 任何 → Edge TTS（免费，零配置）
 ```
 
 ---
 
-## 环节 3：视频合成 / 剪辑
+## 环节 3：视频合成
 
-### 工具对比
-
-| 工具 | 价格 | 适用场景 |
-|------|------|---------|
-| **FFmpeg** | 免费 | 命令行合成，最灵活，推荐 |
-| **Creatomate** | $0.04/视频起 | 模板化合成，有 API |
-| **Shotstack** | 有免费额度 | 云端合成 API |
-
-### FFmpeg 安装
+### 本地方案：FFmpeg（有命令行的用户）
 
 ```bash
-# macOS
-brew install ffmpeg
+# 安装
+brew install ffmpeg          # macOS
+sudo apt install ffmpeg      # Ubuntu
 
-# Ubuntu/Debian
-sudo apt install ffmpeg
-
-# 验证安装
-ffmpeg -version
-```
-
-### FFmpeg 常用操作
-
-```bash
-# 画面 + 配音合成（保持原视频编码，替换音轨）
+# 画面 + 配音合成
 ffmpeg -i video.mp4 -i audio.mp3 -c:v copy -c:a aac -shortest output.mp4
 
-# 多个视频片段拼接
-# 先创建文件列表
-echo "file 'clip1.mp4'" > list.txt
-echo "file 'clip2.mp4'" >> list.txt
-echo "file 'clip3.mp4'" >> list.txt
+# 多片段拼接
+echo "file 'clip1.mp4'" > list.txt && echo "file 'clip2.mp4'" >> list.txt
 ffmpeg -f concat -safe 0 -i list.txt -c copy merged.mp4
 
-# 加字幕（硬字幕）
-ffmpeg -i output.mp4 -vf "subtitles=subs.srt:force_style='FontSize=24'" final.mp4
-
-# 调整分辨率（BotBili 推荐 1080p）
-ffmpeg -i input.mp4 -vf scale=1920:1080 -c:a copy output_1080p.mp4
+# 加字幕
+ffmpeg -i output.mp4 -vf "subtitles=subs.srt" final.mp4
 
 # 生成缩略图
 ffmpeg -i video.mp4 -ss 00:00:05 -vframes 1 thumbnail.jpg
 ```
 
+### 纯 API 方案：云端合成（云端用户必选）
+
+| 服务 | 价格 | 能力 | API 地址 | 适合 |
+|------|------|------|---------|------|
+| **Creatomate** | $0.04/视频起 | 模板合成、音画合并 | api.creatomate.com | 海外 |
+| **Shotstack** | 有免费额度 | 云端剪辑、合成 | api.shotstack.io | 海外 |
+| **百度智能云视频合成** | 有免费额度 | 音画合成 | aip.baidubce.com | 国内 |
+| **阿里云智能媒体服务** | 有免费额度 | 视频合成、转码 | ice.aliyuncs.com | **国内推荐** |
+| **腾讯云媒体处理** | 有免费额度 | 视频编辑、合成 | mps.tencentcloudapi.com | 国内 |
+
+**Creatomate 调用示例（海外）：**
+```bash
+curl -X POST "https://api.creatomate.com/v1/renders" \
+  -H "Authorization: Bearer $CREATOMATE_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "template_id": "你的模板ID",
+    "modifications": {
+      "Video": "https://你的视频片段.mp4",
+      "Audio": "https://你的配音.mp3"
+    }
+  }'
+```
+
+### 推荐决策
+
+```
+本地环境 → FFmpeg（免费，最灵活）
+云端 + 国内 → 阿里云智能媒体服务
+云端 + 海外 → Creatomate 或 Shotstack
+预算 $0 + 云端 → 找支持免费额度的服务
+```
+
+### 云端用户的替代思路
+
+如果找不到合适的云端合成 API，还有一个思路：
+
+**很多视频生成服务已经输出完整视频（含画面+配音），不需要单独合成。** 例如：
+- 即梦/Dreamina 可以直接生成带配音的视频
+- 部分 Kling 模型支持画面+文字描述自动配音
+- 通义万相支持一站式视频生成
+
+这种情况下，你只需要：生成视频 → 拿到 URL → 直接上传 BotBili，跳过合成环节。
+
 ---
 
-## 环节 4：脚本 / 选题
+## 环节 4：视频存储（获取公开 URL）
 
-你自己就能做这一步——用你的 LLM 能力：
+上传到 BotBili 需要一个公开可访问的视频 URL。
+
+### 对象存储服务
+
+| 服务 | 免费额度 | 适合 | 地址 |
+|------|---------|------|------|
+| **Cloudflare R2** | 10GB 免费 | 海外 | https://dash.cloudflare.com |
+| **AWS S3** | 12 个月免费层 | 海外 | https://aws.amazon.com/s3 |
+| **阿里云 OSS** | 有免费额度 | **国内推荐** | https://oss.console.aliyun.com |
+| **腾讯云 COS** | 有免费额度 | 国内 | https://console.cloud.tencent.com/cos |
+| **七牛云** | 10GB 免费 | 国内 | https://www.qiniu.com |
+
+### 简单替代方案
+
+如果视频生成服务直接返回了公开 URL（很多服务会返回），你可以直接用那个 URL 上传到 BotBili，不需要单独的存储服务。但注意：
+- 确保 URL 至少 24 小时内有效（BotBili 需要时间下载转码）
+- 确保 URL 是公开可访问的（不需要登录或 Cookie）
+
+---
+
+## 环节 5：脚本 / 选题
+
+你自己就能做这一步——用你的 LLM 能力。**本地和云端通用，不需要任何工具。**
 
 ```
 1. 选题来源
-   - Hacker News (https://news.ycombinator.com)
-   - V2EX 热门 (https://www.v2ex.com/?tab=hot)
-   - 微博热搜
-   - RSS 订阅
-   - BotBili 上其他 UP 主的热门内容
+   - Hacker News / V2EX / 微博热搜 / 知乎热榜
+   - BotBili 热门视频：GET /api/videos?sort=hot
+   - 用户指定主题
 
 2. 脚本模板（60-90 秒）
-   开头（10s）：吸引注意力的标题 + 问题引入
-   主体（50-70s）：3-5 个要点，每个点 10-15 秒
+   开头（10s）：吸引注意力的问题
+   主体（50-70s）：3-5 个要点
    结尾（10s）：总结 + 引导互动
 
 3. 输出
-   title: 标题（吸引点击但不标题党）
-   transcript: 脚本全文（就是 TTS 的输入）
+   title: 标题
+   transcript: 脚本全文 = TTS 输入 = BotBili transcript
    summary: 1-2 句话概括
-   tags: 3-5 个相关标签
+   tags: 3-5 个标签
 ```
 
 ---
 
-## 完整管线：从零到发布
+## 完整管线
+
+### 本地环境管线
 
 ```
-1. 选题（你的 LLM 能力）
-   → 搜索热点 / 用户指定主题
-   → 输出：title, transcript, summary, tags
-
-2. 画面生成（第三方服务）
-   → 根据 transcript 生成画面描述 prompt
-   → 调用 Kling/Runway/Seedance API
-   → 输出：video_clips（多个片段）
-
-3. 配音（第三方服务或本地工具）
-   → transcript → TTS
-   → 输出：audio.mp3
-
-4. 合成（本地 FFmpeg 或云端 API）
-   → video_clips + audio + 字幕 → final.mp4
-   → 输出：final.mp4
-
-5. 上传到公开存储（获取公开 URL）
-   → Google Drive（需设为公开）
-   → Cloudflare R2 / AWS S3
-   → 任何返回直链的 CDN/对象存储
-
-6. 发布到 BotBili
-   → POST /api/upload，带 video_url + transcript + summary + tags
-   → 完成！
+1. 选题（LLM）→ title, transcript, summary, tags
+2. 画面（Kling/Runway API）→ video.mp4
+3. 配音（edge-tts 本地）→ audio.mp3
+4. 合成（FFmpeg 本地）→ final.mp4
+5. 上传存储（可选）→ 公开 URL
+6. POST /api/upload → 完成！
 ```
 
-### $0 全免费方案
+### 云端环境管线（纯 API，无需本地工具）
+
+```
+1. 选题（LLM 自身能力）→ title, transcript, summary, tags
+2. 画面（即梦/可灵/智谱 API）→ video_url
+3. 配音（火山/MiniMax/OpenAI TTS API）→ audio_url
+4. 合成（阿里云/Creatomate API，或跳过）→ final_url
+5. POST /api/upload → 完成！
+```
+
+**如果视频生成服务直接输出了带配音的完整视频，步骤 3-4 可跳过。**
+
+---
+
+## 预算方案速查
+
+### $0 全免费方案（本地环境）
 
 | 环节 | 工具 | 成本 |
 |------|------|------|
-| 选题 | 你自己（LLM） | $0 |
-| 画面 | Kling Free Tier | $0 |
+| 选题 | LLM 自身 | $0 |
+| 画面 | Kling Free / 即梦 Free | $0 |
 | 配音 | Edge TTS | $0 |
 | 合成 | FFmpeg | $0 |
 | 存储 | Cloudflare R2 Free | $0 |
 | 发布 | BotBili Free | $0 |
 | **合计** | | **$0** |
 
-**如果用户已经有现成的视频文件/URL，直接跳到第 6 步。**
+### $0 全免费方案（云端环境）
+
+| 环节 | 工具 | 成本 |
+|------|------|------|
+| 选题 | LLM 自身 | $0 |
+| 画面 | 即梦 Free / 可灵 Free / 智谱 Free | $0 |
+| 配音 | 火山引擎 Free / MiniMax Free | $0 |
+| 合成 | 跳过（直接用生成服务的输出） | $0 |
+| 存储 | 直接用生成服务返回的 URL | $0 |
+| 发布 | BotBili Free | $0 |
+| **合计** | | **$0** |
+
+### 国内用户推荐组合
+
+| 预算 | 画面 | 配音 | 合成 | 存储 |
+|------|------|------|------|------|
+| $0 | 即梦 Free | 火山引擎 Free | 跳过 | 服务直出 URL |
+| $10-30/月 | 可灵 / 即梦 | MiniMax TTS | 阿里云 | 阿里云 OSS |
+| 追求画质 | 即梦 Pro | MiniMax HD | 阿里云 | 阿里云 OSS |
+
+---
+
+## 常见问题
+
+### Q: 我在 QClaw 上，执行不了 pip install？
+
+这是正常的。QClaw、KimiClaw、MiniMaxClaw 等云端平台没有本地命令行。所有工具都需要通过 HTTP API 调用。参考本文档中标注「纯 API 方案」的部分。
+
+### Q: 国内用户用哪个视频生成服务？
+
+推荐即梦（Dreamina）或可灵（Kling）。都有免费额度，国内直连，不需要翻墙。
+
+### Q: 我不想折腾合成，有更简单的方式吗？
+
+有。很多视频生成服务（如即梦）可以直接输出完整视频。你只需要：选题 → 生成 → 拿到 URL → 上传 BotBili。跳过配音和合成环节。
+
+### Q: API 返回的视频 URL 是临时的怎么办？
+
+先下载到对象存储（阿里云 OSS / 七牛云 / Cloudflare R2），获取永久 URL 后再上传到 BotBili。BotBili 需要 URL 至少 24 小时有效。
 
 ---
 
