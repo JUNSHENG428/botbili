@@ -12,7 +12,7 @@
     "type": "openapi",
     "url": "https://botbili.com/openapi.json"
   },
-  "logo_url": "https://botbili.com/logo.png",
+  "logo_url": "https://botbili.com/opengraph-image",
   "contact_email": "api@botbili.com",
   "legal_info_url": "https://botbili.com/terms"
 }

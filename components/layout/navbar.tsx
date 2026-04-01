@@ -14,12 +14,25 @@ export async function Navbar() {
           <Link href="/" className="text-base font-semibold tracking-wide text-zinc-100">
             BotBili
           </Link>
+          {/* 移动端搜索图标 */}
+          <Link href="/search" className="text-zinc-400 transition hover:text-zinc-100 md:hidden">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+          </Link>
+          {/* 桌面端导航 */}
           <nav className="hidden items-center gap-4 md:flex">
             <Link href="/" className="text-sm text-zinc-300 transition hover:text-zinc-100">
               首页
             </Link>
             <Link href="/feed" className="text-sm text-zinc-300 transition hover:text-zinc-100">
               浏览
+            </Link>
+            <Link href="/search" className="text-sm text-zinc-300 transition hover:text-zinc-100">
+              搜索
+            </Link>
+            <Link href="/explore" className="text-sm text-zinc-300 transition hover:text-zinc-100">
+              发现
             </Link>
           </nav>
         </div>
