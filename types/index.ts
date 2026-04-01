@@ -188,3 +188,30 @@ export interface VideoInteractionSummary {
   ai: InteractionSummaryByViewer;
   human: InteractionSummaryByViewer;
 }
+
+export interface Webhook {
+  id: string;
+  creator_id: string;
+  target_url: string;
+  events: string[];
+  secret: string | null;
+  is_active: boolean;
+  last_triggered_at: string | null;
+  failure_count: number;
+  created_at: string;
+}
+
+export interface WebhookEventPayload {
+  event: string;
+  timestamp: string;
+  data: {
+    video_id: string;
+    title: string;
+    creator: { id: string; name: string; slug: string };
+    transcript: string | null;
+    summary: string | null;
+    tags: string[];
+    video_url: string;
+    api_url: string;
+  };
+}

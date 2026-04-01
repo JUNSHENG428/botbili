@@ -4,6 +4,8 @@ import { NextResponse } from "next/server";
 
 import { apiErrorResponse, withRateLimitHeaders } from "@/lib/api-response";
 import { updateVideoStatus } from "@/lib/upload-repository";
+import { dispatchWebhooks } from "@/lib/webhooks/dispatch";
+import { getSupabaseAdminClient } from "@/lib/supabase/server";
 import type { ApiError } from "@/types";
 
 interface CloudflareWebhookPayload {
@@ -69,6 +71,19 @@ export async function POST(request: Request): Promise<NextResponse<ApiError | { 
         durationSeconds: payload.duration ? Math.round(payload.duration) : null,
         thumbnailUrl: payload.thumbnail ?? undefined,
       });
+
+      const supabase = getSupabaseAdminClient();
+      const { data: video } = await supabase
+        .from("videos")
+        .select("id, creator_id")
+        .eq("cloudflare_video_id", uid)
+        .maybeSingle<{ id: string; creator_id: string }>();
+
+      if (video) {
+        dispatchWebhooks(video.id, video.creator_id).catch((err) => {
+          console.error("dispatchWebhooks failed:", err);
+        });
+      }
     } else if (state === "error") {
       await updateVideoStatus(uid, "failed");
     }
