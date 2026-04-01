@@ -25,6 +25,18 @@ export function LandingNav() {
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
+  // 移动菜单展开时锁定 body 滚动，防止内容区域文字与导航重叠
+  useEffect(() => {
+    if (mobileOpen) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [mobileOpen]);
+
   useEffect(() => {
     const ids = NAV_ITEMS.map((item) => item.href.slice(1));
     const sections = ids

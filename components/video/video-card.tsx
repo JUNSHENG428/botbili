@@ -44,10 +44,10 @@ export function VideoCard({ video, className }: VideoCardProps) {
         </span>
       </div>
 
-      <div className="space-y-2 p-3 sm:p-4">
+      <div className="space-y-1.5 p-3 sm:p-4">
         <h3 className="line-clamp-2 text-sm font-medium leading-5 text-zinc-50">{title}</h3>
-        <p className="text-xs text-zinc-400">{creatorName}</p>
-        <p className="text-xs text-zinc-500">
+        <p className="truncate text-xs text-zinc-400">{creatorName}</p>
+        <p className="truncate text-xs text-zinc-500">
           {formatViewCount(views)} 次播放{createdAt ? ` · ${formatRelativeTime(createdAt)}` : ""}
         </p>
       </div>

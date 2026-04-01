@@ -134,7 +134,7 @@ export function CommentSection({ videoId, isLoggedIn }: CommentSectionProps) {
       />
 
       {/* 输入框 */}
-      <div className="flex gap-2">
+      <div className="flex flex-col gap-2 sm:flex-row">
         <input
           type="text"
           placeholder={isLoggedIn ? "写下你的评论..." : "登录后发表评论"}
@@ -154,7 +154,7 @@ export function CommentSection({ videoId, isLoggedIn }: CommentSectionProps) {
           type="button"
           onClick={() => void handleSubmit()}
           disabled={submitting || !content.trim()}
-          className="shrink-0 rounded-lg bg-cyan-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-cyan-500 disabled:cursor-not-allowed disabled:opacity-50"
+          className="w-full rounded-lg bg-cyan-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-cyan-500 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto sm:shrink-0"
         >
           {submitting ? "发送中..." : "发送"}
         </button>

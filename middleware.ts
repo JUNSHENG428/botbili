@@ -1,8 +1,10 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-const AUTH_ROUTES = ["/create", "/dashboard", "/settings", "/onboarding"];
+const AUTH_ROUTES = ["/create", "/dashboard", "/settings", "/onboarding", "/admin"];
 const INVITE_ROUTES = ["/create", "/dashboard", "/onboarding"];
+const ADMIN_ROUTES = ["/admin"];
+const ADMIN_EMAIL = "majunsheng0428@gmail.com";
 
 function getEnv(name: string): string {
   const value = process.env[name];

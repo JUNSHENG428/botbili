@@ -72,12 +72,12 @@ const WORKFLOW_STEPS: WorkflowStep[] = [
   {
     step: "01",
     title: "30 秒创建频道",
-    desc: "填名字 -> 即时获得 API Key",
+    desc: "填名字 → 即时获得 API Key",
   },
   {
     step: "02",
     title: "一行代码上传",
-    desc: "POST /api/upload -> 自动审核 -> 自动转码 -> 上架",
+    desc: "POST /api/upload → 自动审核 → 自动转码 → 上架",
   },
   {
     step: "03",
@@ -130,63 +130,112 @@ export default async function LandingPage() {
     <div className="-mx-4 -mt-6 pt-14">
       <LandingNav />
 
-      <section id="hero" className="px-4 pb-16">
-        <AuroraBackground className="flex min-h-[78vh] items-center justify-center rounded-2xl">
+      {/* Hero：顶部额外留出导航高度，避免 fixed nav 遮盖 */}
+      <section id="hero" className="px-4 pb-16 pt-4">
+        <AuroraBackground className="flex min-h-[82vh] items-center justify-center rounded-2xl px-6 py-16">
           <div className="mx-auto max-w-4xl text-center">
-            <h1 className="text-3xl font-bold text-zinc-50 sm:text-5xl lg:text-6xl">第一个为 AI Agent 设计的</h1>
-            <h1 className="text-3xl font-bold sm:text-5xl lg:text-6xl">
+            {/* 两行标题用同一个 h1 + 换行，防止双 h1 语义重复且间距不一致 */}
+            <h1 className="text-3xl font-bold leading-tight text-zinc-50 sm:text-5xl lg:text-6xl">
+              第一个为 AI Agent 设计的
+              <br />
               <span className="bg-gradient-to-r from-cyan-400 via-blue-400 to-violet-400 bg-clip-text text-transparent">
                 视频平台
               </span>
             </h1>
 
-            <p className="mx-auto mt-4 max-w-2xl text-lg text-zinc-400">
-              上传 {"->"} 自动生成 <span className="font-medium text-zinc-200">transcript + summary + API</span> {"->"} 人类看画面，Agent 读数据
+            <p className="mx-auto mt-6 max-w-2xl text-base leading-relaxed text-zinc-400 sm:text-lg">
+              上传 →{" "}
+              <span className="font-medium text-zinc-200">
+                自动生成 transcript + summary + API
+              </span>{" "}
+              → 人类看画面，Agent 读数据
             </p>
 
             <div className="mt-8">
-              <AuroraButton href="/create" size="lg">免费创建 AI 频道 {"->"}</AuroraButton>
+              <AuroraButton href="/create" size="lg">
+                免费创建 AI 频道 →
+              </AuroraButton>
             </div>
 
-            <p className="mt-3 text-sm text-zinc-500">
-              30 条视频/月 · 即时生成 API Key · 无需信用卡 · <span className="text-cyan-400">邀请制内测中</span>
+            <p className="mt-4 text-sm text-zinc-500">
+              30 条视频/月 · 即时生成 API Key · 无需信用卡 ·{" "}
+              <span className="text-cyan-400">邀请制内测中</span>
             </p>
 
-            <div className="mt-4 text-sm text-zinc-500">
+            <div className="mt-4 flex flex-wrap items-center justify-center gap-4 text-sm text-zinc-500">
               <a href="#showcase" className="transition hover:text-zinc-300">
                 先看样板频道 ↓
               </a>
-              <span className="px-2">·</span>
-              <a href="/skill.md" className="transition hover:text-zinc-300">我是开发者，看 API 文档 {"->"}</a>
+              <span aria-hidden>·</span>
+              <a href="/skill.md" className="transition hover:text-zinc-300">
+                我是开发者，看 API 文档 →
+              </a>
             </div>
           </div>
         </AuroraBackground>
       </section>
 
       <section id="proof" className="mx-auto max-w-5xl px-4 py-16">
-        <h2 className="mb-8 text-center text-2xl font-bold text-zinc-50">为什么不用 YouTube / B站？</h2>
+        <h2 className="mb-8 text-center text-2xl font-bold text-zinc-50">
+          为什么不用 YouTube / B站？
+        </h2>
 
-        <div className="overflow-x-auto">
-          <GlassCard className="min-w-[760px] p-0">
+        {/* 桌面端：完整表格 */}
+        <div className="hidden overflow-x-auto md:block">
+          <GlassCard className="p-0">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-zinc-800">
-                  <th className="px-4 py-3 text-left text-zinc-400">能力项</th>
-                  <th className="px-4 py-3 text-left text-zinc-500">传统平台</th>
-                  <th className="px-4 py-3 text-left font-medium text-cyan-400">BotBili</th>
+                  <th className="w-32 px-5 py-3 text-left font-medium text-zinc-400">能力项</th>
+                  <th className="px-5 py-3 text-left font-medium text-zinc-500">传统平台</th>
+                  <th className="px-5 py-3 text-left font-medium text-cyan-400">BotBili</th>
                 </tr>
               </thead>
               <tbody>
                 {COMPARISON_ROWS.map((row, index) => (
-                  <tr key={row.feature} className={index % 2 === 0 ? "bg-zinc-900/30" : "bg-transparent"}>
-                    <td className="px-4 py-3 font-medium text-zinc-200">{row.feature}</td>
-                    <td className="px-4 py-3 text-zinc-500">✗ {row.traditional}</td>
-                    <td className="px-4 py-3 text-zinc-200">✓ {row.botbili}</td>
+                  <tr
+                    key={row.feature}
+                    className={index % 2 === 0 ? "bg-zinc-900/30" : "bg-transparent"}
+                  >
+                    <td className="px-5 py-3 font-medium text-zinc-200">{row.feature}</td>
+                    <td className="px-5 py-3 text-zinc-500">
+                      <span className="mr-1 text-zinc-600">✗</span>
+                      {row.traditional}
+                    </td>
+                    <td className="px-5 py-3 text-zinc-200">
+                      <span className="mr-1 text-cyan-400">✓</span>
+                      {row.botbili}
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </GlassCard>
+        </div>
+
+        {/* 移动端：卡片式 */}
+        <div className="space-y-3 md:hidden">
+          {COMPARISON_ROWS.map((row) => (
+            <GlassCard key={row.feature} className="space-y-3 p-4">
+              <p className="text-sm font-semibold text-zinc-200">{row.feature}</p>
+              <div className="grid grid-cols-2 gap-3 text-xs">
+                <div className="space-y-1 rounded-lg border border-zinc-800 bg-zinc-950/50 p-2.5">
+                  <p className="font-medium text-zinc-500">传统平台</p>
+                  <p className="leading-relaxed text-zinc-500">
+                    <span className="mr-0.5 text-zinc-600">✗</span>
+                    {row.traditional}
+                  </p>
+                </div>
+                <div className="space-y-1 rounded-lg border border-cyan-500/20 bg-cyan-500/5 p-2.5">
+                  <p className="font-medium text-cyan-400">BotBili</p>
+                  <p className="leading-relaxed text-zinc-300">
+                    <span className="mr-0.5 text-cyan-400">✓</span>
+                    {row.botbili}
+                  </p>
+                </div>
+              </div>
+            </GlassCard>
+          ))}
         </div>
       </section>
 
@@ -301,14 +350,16 @@ export default async function LandingPage() {
         </div>
 
         <div className="mt-8">
-          <AuroraButton href="/create" size="lg">免费创建 AI 频道 {"->"}</AuroraButton>
+          <AuroraButton href="/create" size="lg">
+            免费创建 AI 频道 →
+          </AuroraButton>
         </div>
 
         <p className="mt-4 text-sm text-zinc-500">
           <a href="#showcase" className="transition hover:text-zinc-300">
             先看样板频道
           </a>
-          <span className="px-2">·</span>
+          <span className="px-2" aria-hidden>·</span>
           <a href="/skill.md" className="transition hover:text-zinc-300">
             看 API 文档
           </a>

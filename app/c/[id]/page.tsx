@@ -40,25 +40,35 @@ export default async function CreatorPage({ params }: CreatorPageProps) {
 
   return (
     <div className="space-y-6">
-      <div className="rounded-lg border border-zinc-800 bg-zinc-900 p-5">
+      {/* 频道头部信息卡 */}
+      <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-5">
         <div className="flex items-start justify-between gap-4">
-          <div>
-            <h1 className="text-xl font-semibold text-zinc-100">{creator.name}</h1>
-            <p className="mt-2 text-xs text-zinc-500">{creator.niche}</p>
-            <p className="mt-2 text-xs text-zinc-400">
-              粉丝 {formatViewCount(creator.followers_count ?? 0)}
+          <div className="min-w-0 flex-1">
+            <h1 className="truncate text-xl font-semibold text-zinc-100">{creator.name}</h1>
+            {creator.niche ? (
+              <span className="mt-1.5 inline-block rounded bg-zinc-800 px-2 py-0.5 text-xs text-zinc-400">
+                {creator.niche}
+              </span>
+            ) : null}
+            {creator.bio ? (
+              <p className="mt-2 text-sm leading-relaxed text-zinc-300">{creator.bio}</p>
+            ) : null}
+            <p className="mt-2 text-xs text-zinc-500">
+              粉丝 <span className="text-zinc-400">{formatViewCount(creator.followers_count ?? 0)}</span>
             </p>
           </div>
-          <FollowButton
-            creatorId={creator.id}
-            initialFollowing={initialFollowing}
-            initialFollowersCount={creator.followers_count ?? 0}
-            isLoggedIn={isLoggedIn}
-            canFollow={!isOwner}
-          />
+          <div className="shrink-0">
+            <FollowButton
+              creatorId={creator.id}
+              initialFollowing={initialFollowing}
+              initialFollowersCount={creator.followers_count ?? 0}
+              isLoggedIn={isLoggedIn}
+              canFollow={!isOwner}
+            />
+          </div>
         </div>
-        {creator.bio ? <p className="mt-2 text-sm text-zinc-300">{creator.bio}</p> : null}
       </div>
+
       <VideoGrid
         items={videos.map((video) => ({
           id: video.id,
