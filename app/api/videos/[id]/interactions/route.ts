@@ -97,12 +97,15 @@ async function resolveViewerContext(
     });
   }
 
+  // 允许匿名游客记录 view 行为（不需要登录）
+  // 其他行为（like、comment、share）仍需要登录
   const supabase = await createClientForServer();
   const {
     data: { user },
     error,
   } = await supabase.auth.getUser();
-  if (error || !user) {
+
+  if ((error || !user) && payload.action !== "view") {
     return apiErrorResponse({
       message: "Unauthorized",
       code: "AUTH_UNAUTHORIZED",

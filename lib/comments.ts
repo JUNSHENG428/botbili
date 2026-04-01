@@ -100,9 +100,11 @@ export async function listComments(options: ListCommentsOptions): Promise<Commen
 
   const supabase = getSupabaseAdminClient();
 
+  // 不用 PostgREST join（comments.user_id FK 指向 auth.users 而非 profiles，无法自动 join）
+  // 先查评论，再批量查 profiles
   let query = supabase
     .from("comments")
-    .select("*, profiles:user_id(display_name, avatar_url)", { count: "exact" })
+    .select("*", { count: "exact" })
     .eq("video_id", videoId)
     .order("created_at", { ascending: false })
     .range(from, to);
@@ -120,18 +122,33 @@ export async function listComments(options: ListCommentsOptions): Promise<Commen
     throw new Error(`listComments failed: ${error.message}`);
   }
 
+  const rows = (data ?? []) as CommentRecord[];
   const total = count ?? 0;
-  const comments: CommentWithProfile[] = (data ?? []).map((row: Record<string, unknown>) => {
-    const profile = row.profiles as { display_name?: string; avatar_url?: string } | null;
+
+  // 批量查询有 user_id 的评论对应的 profiles
+  const userIds = rows
+    .map((r) => r.user_id)
+    .filter((id): id is string => id !== null);
+
+  const profileMap = new Map<string, { display_name: string | null; avatar_url: string | null }>();
+
+  if (userIds.length > 0) {
+    const { data: profiles } = await supabase
+      .from("profiles")
+      .select("id, display_name, avatar_url")
+      .in("id", userIds);
+
+    if (profiles) {
+      for (const p of profiles as { id: string; display_name: string | null; avatar_url: string | null }[]) {
+        profileMap.set(p.id, { display_name: p.display_name, avatar_url: p.avatar_url });
+      }
+    }
+  }
+
+  const comments: CommentWithProfile[] = rows.map((row) => {
+    const profile = row.user_id ? profileMap.get(row.user_id) : null;
     return {
-      id: row.id as string,
-      video_id: row.video_id as string,
-      user_id: row.user_id as string | null,
-      agent_key_hash: row.agent_key_hash as string | null,
-      content: row.content as string,
-      viewer_type: row.viewer_type as ViewerType,
-      viewer_label: row.viewer_label as string | null,
-      created_at: row.created_at as string,
+      ...row,
       display_name: profile?.display_name ?? null,
       avatar_url: profile?.avatar_url ?? null,
     };
