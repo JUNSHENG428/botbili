@@ -100,8 +100,6 @@ export async function listComments(options: ListCommentsOptions): Promise<Commen
 
   const supabase = getSupabaseAdminClient();
 
-  // 不用 PostgREST join（comments.user_id FK 指向 auth.users 而非 profiles，无法自动 join）
-  // 先查评论，再批量查 profiles
   let query = supabase
     .from("comments")
     .select("*", { count: "exact" })
@@ -122,34 +120,36 @@ export async function listComments(options: ListCommentsOptions): Promise<Commen
     throw new Error(`listComments failed: ${error.message}`);
   }
 
-  const rows = (data ?? []) as CommentRecord[];
   const total = count ?? 0;
+  const userIds = (data ?? [])
+    .map((row: Record<string, unknown>) => row.user_id as string | null)
+    .filter((uid): uid is string => uid !== null);
 
-  // 批量查询有 user_id 的评论对应的 profiles
-  const userIds = rows
-    .map((r) => r.user_id)
-    .filter((id): id is string => id !== null);
-
-  const profileMap = new Map<string, { display_name: string | null; avatar_url: string | null }>();
-
+  let profileMap = new Map<string, { display_name: string | null; avatar_url: string | null }>();
   if (userIds.length > 0) {
     const { data: profiles } = await supabase
       .from("profiles")
       .select("id, display_name, avatar_url")
       .in("id", userIds);
-
-    if (profiles) {
-      for (const p of profiles as { id: string; display_name: string | null; avatar_url: string | null }[]) {
-        profileMap.set(p.id, { display_name: p.display_name, avatar_url: p.avatar_url });
-      }
+    for (const p of profiles ?? []) {
+      const pr = p as { id: string; display_name: string | null; avatar_url: string | null };
+      profileMap.set(pr.id, { display_name: pr.display_name, avatar_url: pr.avatar_url });
     }
   }
 
-  const comments: CommentWithProfile[] = rows.map((row) => {
-    const profile = row.user_id ? profileMap.get(row.user_id) : null;
+  const comments: CommentWithProfile[] = (data ?? []).map((row: Record<string, unknown>) => {
+    const userId = row.user_id as string | null;
+    const profile = userId ? profileMap.get(userId) : null;
     return {
-      ...row,
-      display_name: profile?.display_name ?? null,
+      id: row.id as string,
+      video_id: row.video_id as string,
+      user_id: userId,
+      agent_key_hash: row.agent_key_hash as string | null,
+      content: row.content as string,
+      viewer_type: row.viewer_type as ViewerType,
+      viewer_label: row.viewer_label as string | null,
+      created_at: row.created_at as string,
+      display_name: profile?.display_name ?? row.viewer_label as string ?? null,
       avatar_url: profile?.avatar_url ?? null,
     };
   });

@@ -37,6 +37,10 @@ function sleep(ms: number): Promise<void> {
 }
 
 function buildEmbedUrl(uid: string, customerSubdomain: string): string {
+  // customerSubdomain 可能是完整域名或仅 subdomain 部分
+  if (customerSubdomain.includes("cloudflarestream.com")) {
+    return `https://${customerSubdomain}/${uid}/iframe`;
+  }
   return `https://customer-${customerSubdomain}.cloudflarestream.com/${uid}/iframe`;
 }
 
