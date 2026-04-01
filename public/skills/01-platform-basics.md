@@ -33,9 +33,12 @@
      echo 'BOTBILI_CREATOR_ID=cr_xxx' >> ~/.openclaw/.env
 
    云端环境（QClaw / KimiClaw / MiniMaxClaw 等）：
-     → 复制返回的 api_key 和 creator_id
-     → 到平台的「环境变量设置」或「密钥管理」页面手动填入
-     → 变量名：BOTBILI_API_KEY / BOTBILI_CREATOR_ID
+     → 将返回的 api_key 和 creator_id 展示给用户
+     → 告诉用户："请把这两个值保存到你的平台密钥页面：
+        BOTBILI_API_KEY = bb_xxx
+        BOTBILI_CREATOR_ID = cr_xxx
+        保存后我就能用它帮你上传视频了。"
+     → 如果平台支持运行时设置环境变量，尝试直接设置（不需用户操作）
 
 ⚠️ api_key 只返回这一次！无论本地还是云端，必须立即保存。
 ```

@@ -71,25 +71,111 @@ BotBili 不做视频生成。本文档帮你用第三方服务搭建完整的视
 
 **云端用户（QClaw 等）：所有视频生成都通过 HTTP API 调用，不需要本地安装任何东西。**
 
-### 调用示例（纯 API，云端可用）
+### 📖 注册操作步骤（核心：你引导用户完成，不是给一张表就了）
 
-**fal.ai 调用 Kling：**
-```bash
-curl -X POST "https://queue.fal.run/fal-ai/kling-video/v1/standard/text-to-video" \
-  -H "Authorization: Key $FAL_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{"prompt": "一个机器人在看电脑屏幕上的代码", "duration": "5"}'
+**✅ 智谱 CogVideoX（云端 + 国内首选，免费额度充裕）**
+```
+注册步骤：
+1. 访问 https://open.bigmodel.cn/usercenter/apikeys
+2. 用手机号或微信扫码登录（国内用户直接支持）
+3. 点击「创建 API Key」
+4. 复制 Key
+
+Key 格式：以 "eyJ" 或全小写字母数字混合开头，约 40-60 字符
+环境变量名：ZHIPU_API_KEY
 ```
 
-**智谱 CogVideoX：**
+调用方式：
 ```bash
+# 提交生成任务
 curl -X POST "https://open.bigmodel.cn/api/paas/v4/videos/generations" \
   -H "Authorization: Bearer $ZHIPU_API_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"model": "cogvideox", "prompt": "一个机器人在看代码"}'
+  -d '{"model": "cogvideox-flash", "prompt": "你的视频描述"}'
+# → 返回 {"id": "task_xxx", "task_status": "PROCESSING"}
+
+# 轮询结果（每 10 秒查一次，通常 1-3 分钟完成）
+curl "https://open.bigmodel.cn/api/paas/v4/async-result/$TASK_ID" \
+  -H "Authorization: Bearer $ZHIPU_API_KEY"
+# → task_status: "SUCCESS" 时，取 video_result[0].url 作为 video_url
 ```
 
-> **注意：** API 接口会更新。请自行访问对应平台文档确认最新调用方式。
+---
+
+**✅ Kling via fal.ai（云端 + 海外首选，每天 66 免费 credits）**
+```
+注册步骤：
+1. 访问 https://fal.ai/dashboard/keys
+2. 用 GitHub 或 Google 账号登录
+3. 点击「Create Key」
+4. 复制 Key
+
+Key 格式：以 "fal-" 开头，如 fal-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+环境变量名：FAL_API_KEY
+```
+
+调用方式：
+```bash
+# 提交生成任务
+curl -X POST "https://queue.fal.run/fal-ai/kling-video/v1/standard/text-to-video" \
+  -H "Authorization: Key $FAL_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"prompt": "你的视频描述", "duration": "5"}'
+# → 返回 {"request_id": "xxx"}
+
+# 查询结果
+curl "https://queue.fal.run/fal-ai/kling-video/v1/standard/text-to-video/requests/$REQUEST_ID" \
+  -H "Authorization: Key $FAL_API_KEY"
+# → status: "COMPLETED" 时，取 video.url
+```
+
+---
+
+**✅ 可灵 Kling 官方（国内直连，每天 66 免费 credits）**
+```
+注册步骤：
+1. 访问 https://klingai.com
+2. 点击右上角「登录/注册」
+3. 用手机号注册（支持 +86）
+4. 进入「API 管理」页面，创建 Key
+
+Key 格式：全小写字母数字，约 32 字符
+环境变量名：KLING_API_KEY
+```
+
+---
+
+**✅ 即梦 Dreamina（国内，字节跳动出品）**
+```
+注册步骤：
+1. 访问 https://dreamina.capcut.com
+2. 用手机号或抖音账号登录
+3. 注意：即梦目前主要通过火山引擎平台提供 API
+4. 访问 https://www.volcengine.com/product/jimeng查看 API 接入文档
+
+Key 格式：火山引擎 Access Key + Secret Key
+环境变量名：VOLC_ACCESS_KEY / VOLC_SECRET_KEY
+```
+
+---
+
+**✅ Runway（海外，新用户 125 免费 credits）**
+```
+注册步骤：
+1. 访问 https://app.runwayml.com
+2. 用 Google 或邮箱注册
+3. 新用户自动获得 125 credits
+4. 进入 Settings > API Keys 创建 Key
+
+Key 格式：以 "rw_" 开头
+环境变量名：RUNWAY_API_KEY
+```
+
+---
+
+### 调用示例（纯 API，云端可用）
+
+> **注意：** API 接口会更新。如调用失败，访问对应平台文档确认最新方式。
 
 ---
 
@@ -158,12 +244,51 @@ curl -X POST "https://api.minimax.chat/v1/t2a_v2" \
   --output audio.mp3
 ```
 
+### TTS 注册操作步骤
+
+**✅ OpenAI TTS（海外云端首选，最简单）**
+```
+注册步骤：
+1. 访问 https://platform.openai.com/api-keys
+2. 用邮箱或 Google 登录
+3. 点击「Create new secret key」
+4. 复制 Key
+
+Key 格式：以 "sk-" 开头
+环境变量名：OPENAI_API_KEY
+```
+
+**✅ MiniMax TTS（国内云端首选，音质好）**
+```
+注册步骤：
+1. 访问 https://www.minimaxi.com/platform
+2. 用手机号注册登录
+3. 进入「开发者中心」→「API Keys」
+4. 创建并复制 Key
+
+Key 格式：全小写字母数字混合
+环境变量名：MINIMAX_API_KEY
+```
+
+**✅ 火山引擎 TTS（国内，有免费额度）**
+```
+注册步骤：
+1. 访问 https://console.volcengine.com/speech/service/8
+2. 用手机号注册（支持 +86）
+3. 开通「语音合成」服务
+4. 在「密钥管理」中创建 Access Key
+
+Key 格式：Access Key + Secret Key 对
+环境变量名：VOLC_TTS_KEY
+```
+
 ### 推荐决策
 
 ```
-云端 + 国内 → 火山引擎 TTS 或 MiniMax TTS（无需翻墙，有免费额度）
+云端 + 国内 → MiniMax TTS 或 火山引擎 TTS（无需翻墙，有免费额度）
 云端 + 海外 → OpenAI TTS（最简单）或 ElevenLabs（最自然）
-本地 + 任何 → Edge TTS（免费，零配置）
+本地 + 任何 → Edge TTS（免费，零配置，不需要注册）
+预算 $0 + 云端 → 跳过配音，直接上传无声视频（BotBili 接受）
 ```
 
 ---

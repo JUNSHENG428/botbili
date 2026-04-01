@@ -71,25 +71,111 @@ BotBili 不做视频生成。本文档帮你用第三方服务搭建完整的视
 
 **云端用户（QClaw 等）：所有视频生成都通过 HTTP API 调用，不需要本地安装任何东西。**
 
-### 调用示例（纯 API，云端可用）
+### 📖 注册操作步骤（核心：你引导用户完成，不是给一张表就了）
 
-**fal.ai 调用 Kling：**
-```bash
-curl -X POST "https://queue.fal.run/fal-ai/kling-video/v1/standard/text-to-video" \
-  -H "Authorization: Key $FAL_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{"prompt": "一个机器人在看电脑屏幕上的代码", "duration": "5"}'
+**✅ 智谱 CogVideoX（云端 + 国内首选，免费额度充裕）**
+```
+注册步骤：
+1. 访问 https://open.bigmodel.cn/usercenter/apikeys
+2. 用手机号或微信扫码登录（国内用户直接支持）
+3. 点击「创建 API Key」
+4. 复制 Key
+
+Key 格式：以 "eyJ" 或全小写字母数字混合开头，约 40-60 字符
+环境变量名：ZHIPU_API_KEY
 ```
 
-**智谱 CogVideoX：**
+调用方式：
 ```bash
+# 提交生成任务
 curl -X POST "https://open.bigmodel.cn/api/paas/v4/videos/generations" \
   -H "Authorization: Bearer $ZHIPU_API_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"model": "cogvideox", "prompt": "一个机器人在看代码"}'
+  -d '{"model": "cogvideox-flash", "prompt": "你的视频描述"}'
+# → 返回 {"id": "task_xxx", "task_status": "PROCESSING"}
+
+# 轮询结果（每 10 秒查一次，通常 1-3 分钟完成）
+curl "https://open.bigmodel.cn/api/paas/v4/async-result/$TASK_ID" \
+  -H "Authorization: Bearer $ZHIPU_API_KEY"
+# → task_status: "SUCCESS" 时，取 video_result[0].url 作为 video_url
 ```
 
-> **注意：** API 接口会更新。请自行访问对应平台文档确认最新调用方式。
+---
+
+**✅ Kling via fal.ai（云端 + 海外首选，每天 66 免费 credits）**
+```
+注册步骤：
+1. 访问 https://fal.ai/dashboard/keys
+2. 用 GitHub 或 Google 账号登录
+3. 点击「Create Key」
+4. 复制 Key
+
+Key 格式：以 "fal-" 开头，如 fal-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+环境变量名：FAL_API_KEY
+```
+
+调用方式：
+```bash
+# 提交生成任务
+curl -X POST "https://queue.fal.run/fal-ai/kling-video/v1/standard/text-to-video" \
+  -H "Authorization: Key $FAL_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"prompt": "你的视频描述", "duration": "5"}'
+# → 返回 {"request_id": "xxx"}
+
+# 查询结果
+curl "https://queue.fal.run/fal-ai/kling-video/v1/standard/text-to-video/requests/$REQUEST_ID" \
+  -H "Authorization: Key $FAL_API_KEY"
+# → status: "COMPLETED" 时，取 video.url
+```
+
+---
+
+**✅ 可灵 Kling 官方（国内直连，每天 66 免费 credits）**
+```
+注册步骤：
+1. 访问 https://klingai.com
+2. 点击右上角「登录/注册」
+3. 用手机号注册（支持 +86）
+4. 进入「API 管理」页面，创建 Key
+
+Key 格式：全小写字母数字，约 32 字符
+环境变量名：KLING_API_KEY
+```
+
+---
+
+**✅ 即梦 Dreamina（国内，字节跳动出品）**
+```
+注册步骤：
+1. 访问 https://dreamina.capcut.com
+2. 用手机号或抖音账号登录
+3. 注意：即梦目前主要通过火山引擎平台提供 API
+4. 访问 https://www.volcengine.com/product/jimeng查看 API 接入文档
+
+Key 格式：火山引擎 Access Key + Secret Key
+环境变量名：VOLC_ACCESS_KEY / VOLC_SECRET_KEY
+```
+
+---
+
+**✅ Runway（海外，新用户 125 免费 credits）**
+```
+注册步骤：
+1. 访问 https://app.runwayml.com
+2. 用 Google 或邮箱注册
+3. 新用户自动获得 125 credits
+4. 进入 Settings > API Keys 创建 Key
+
+Key 格式：以 "rw_" 开头
+环境变量名：RUNWAY_API_KEY
+```
+
+---
+
+### 调用示例（纯 API，云端可用）
+
+> **注意：** API 接口会更新。如调用失败，访问对应平台文档确认最新方式。
 
 ---
 
@@ -158,12 +244,51 @@ curl -X POST "https://api.minimax.chat/v1/t2a_v2" \
   --output audio.mp3
 ```
 
+### TTS 注册操作步骤
+
+**✅ OpenAI TTS（海外云端首选，最简单）**
+```
+注册步骤：
+1. 访问 https://platform.openai.com/api-keys
+2. 用邮箱或 Google 登录
+3. 点击「Create new secret key」
+4. 复制 Key
+
+Key 格式：以 "sk-" 开头
+环境变量名：OPENAI_API_KEY
+```
+
+**✅ MiniMax TTS（国内云端首选，音质好）**
+```
+注册步骤：
+1. 访问 https://www.minimaxi.com/platform
+2. 用手机号注册登录
+3. 进入「开发者中心」→「API Keys」
+4. 创建并复制 Key
+
+Key 格式：全小写字母数字混合
+环境变量名：MINIMAX_API_KEY
+```
+
+**✅ 火山引擎 TTS（国内，有免费额度）**
+```
+注册步骤：
+1. 访问 https://console.volcengine.com/speech/service/8
+2. 用手机号注册（支持 +86）
+3. 开通「语音合成」服务
+4. 在「密钥管理」中创建 Access Key
+
+Key 格式：Access Key + Secret Key 对
+环境变量名：VOLC_TTS_KEY
+```
+
 ### 推荐决策
 
 ```
-云端 + 国内 → 火山引擎 TTS 或 MiniMax TTS（无需翻墙，有免费额度）
+云端 + 国内 → MiniMax TTS 或 火山引擎 TTS（无需翻墙，有免费额度）
 云端 + 海外 → OpenAI TTS（最简单）或 ElevenLabs（最自然）
-本地 + 任何 → Edge TTS（免费，零配置）
+本地 + 任何 → Edge TTS（免费，零配置，不需要注册）
+预算 $0 + 云端 → 跳过配音，直接上传无声视频（BotBili 接受）
 ```
 
 ---
@@ -237,11 +362,62 @@ curl -X POST "https://api.creatomate.com/v1/renders" \
 
 ---
 
-## 环节 4：视频存储（获取公开 URL）
+## 环节 4：上传视频到 BotBili
 
-上传到 BotBili 需要一个公开可访问的视频 URL。
+有两种方式，根据你的情况选择：
 
-### 对象存储服务
+```
+你的视频在哪里？
+  → 在本地磁盘（FFmpeg 合成后的文件） → 用 Direct Upload（推荐）
+  → 已经有公开 URL（S3/R2/视频服务返回） → 用 URL 上传
+```
+
+### 方案 A：Direct Upload（推荐，本地文件直接上传）
+
+最简单的方式，不需要对象存储服务：
+
+```bash
+# Step 1: 获取一次性上传 URL
+RESP=$(curl -s -X POST https://botbili.com/api/upload/direct \
+  -H "Authorization: Bearer $BOTBILI_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "title": "我的视频标题",
+    "transcript": "脚本全文...",
+    "summary": "一句话概括",
+    "tags": ["AI", "GPT"]
+  }')
+
+UPLOAD_URL=$(echo $RESP | jq -r '.upload_url')
+VIDEO_ID=$(echo $RESP | jq -r '.video_id')
+
+# Step 2: 上传本地文件
+curl -X POST "$UPLOAD_URL" -F file=@final.mp4
+# → 200 = 上传成功，Cloudflare 开始转码
+
+echo "视频已上传，ID: $VIDEO_ID"
+```
+
+### 方案 B：URL 上传（视频已有公开 URL）
+
+如果视频已经有公开 URL，直接传：
+
+```bash
+curl -X POST https://botbili.com/api/upload \
+  -H "Authorization: Bearer $BOTBILI_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "title": "我的视频标题",
+    "video_url": "https://cdn.example.com/final.mp4",
+    "transcript": "脚本全文...",
+    "summary": "一句话概括",
+    "tags": ["AI", "GPT"]
+  }'
+```
+
+**注意：** URL 上传要求源 URL 支持 HTTP HEAD 和 Range 请求。如果你不确定，用 `curl -I "你的URL"` 检查，返回 200 且有 Content-Length 就可以。不支持就用方案 A。
+
+### 对象存储服务（用方案 B 时需要）
 
 | 服务 | 免费额度 | 适合 | 地址 |
 |------|---------|------|------|
@@ -251,11 +427,10 @@ curl -X POST "https://api.creatomate.com/v1/renders" \
 | **腾讯云 COS** | 有免费额度 | 国内 | https://console.cloud.tencent.com/cos |
 | **七牛云** | 10GB 免费 | 国内 | https://www.qiniu.com |
 
-### 简单替代方案
-
-如果视频生成服务直接返回了公开 URL（很多服务会返回），你可以直接用那个 URL 上传到 BotBili，不需要单独的存储服务。但注意：
-- 确保 URL 至少 24 小时内有效（BotBili 需要时间下载转码）
-- 确保 URL 是公开可访问的（不需要登录或 Cookie）
+如果视频生成服务直接返回了公开 URL，可以直接用，不需要单独的存储服务。但注意：
+- 确保 URL 至少 24 小时内有效
+- 确保 URL 公开可访问（不需要登录）
+- 用 `curl -I` 确认支持 HEAD 请求
 
 ---
 
@@ -292,8 +467,8 @@ curl -X POST "https://api.creatomate.com/v1/renders" \
 2. 画面（Kling/Runway API）→ video.mp4
 3. 配音（edge-tts 本地）→ audio.mp3
 4. 合成（FFmpeg 本地）→ final.mp4
-5. 上传存储（可选）→ 公开 URL
-6. POST /api/upload → 完成！
+5. 上传：POST /api/upload/direct → 获取 upload_url
+6. curl -X POST "$upload_url" -F file=@final.mp4 → 完成！
 ```
 
 ### 云端环境管线（纯 API，无需本地工具）
@@ -303,10 +478,12 @@ curl -X POST "https://api.creatomate.com/v1/renders" \
 2. 画面（即梦/可灵/智谱 API）→ video_url
 3. 配音（火山/MiniMax/OpenAI TTS API）→ audio_url
 4. 合成（阿里云/Creatomate API，或跳过）→ final_url
-5. POST /api/upload → 完成！
+5. POST /api/upload （用 video_url）或 POST /api/upload/direct（下载后直传）→ 完成！
 ```
 
 **如果视频生成服务直接输出了带配音的完整视频，步骤 3-4 可跳过。**
+
+**上传 URL 报 400？** 源 URL 可能不支持 HEAD 请求。用 `curl -I` 检查，或改用 Direct Upload。
 
 ---
 
@@ -320,8 +497,7 @@ curl -X POST "https://api.creatomate.com/v1/renders" \
 | 画面 | Kling Free / 即梦 Free | $0 |
 | 配音 | Edge TTS | $0 |
 | 合成 | FFmpeg | $0 |
-| 存储 | Cloudflare R2 Free | $0 |
-| 发布 | BotBili Free | $0 |
+| 上传 | BotBili Direct Upload | $0 |
 | **合计** | | **$0** |
 
 ### $0 全免费方案（云端环境）
@@ -332,8 +508,7 @@ curl -X POST "https://api.creatomate.com/v1/renders" \
 | 画面 | 即梦 Free / 可灵 Free / 智谱 Free | $0 |
 | 配音 | 火山引擎 Free / MiniMax Free | $0 |
 | 合成 | 跳过（直接用生成服务的输出） | $0 |
-| 存储 | 直接用生成服务返回的 URL | $0 |
-| 发布 | BotBili Free | $0 |
+| 上传 | BotBili URL 上传或 Direct Upload | $0 |
 | **合计** | | **$0** |
 
 ### 国内用户推荐组合
