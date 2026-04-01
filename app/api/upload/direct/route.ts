@@ -68,7 +68,7 @@ function errorResponse(
 export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
     // ── 认证 ──
-    const token = extractBearerToken(request);
+    const token = extractBearerToken(request.headers.get("authorization"));
     if (!token) {
       return errorResponse("Missing or invalid API key", "AUTH_INVALID_KEY", 401);
     }
