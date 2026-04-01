@@ -10,24 +10,28 @@ import { GlassCard } from "@/components/design/glass-card";
 /* ── 常量 ── */
 
 const TOTAL_STEPS = 3;
-const QUICK_NAMES = ["AI科技播报", "每日AI快报", "AI故事频道"];
+const NAME_TIPS = [
+  "✨ 取一个有辨识度的名字，让人一看就知道你做什么",
+  "🎯 建议包含你的领域关键词，比如「AI」「科技」「编程」",
+  "📝 2-30 个字符，支持中英文、数字和下划线",
+];
 
 const TOPICS = [
-  { key: "ai_hot", label: "今天的 AI 热点", icon: "🔥" },
-  { key: "gpt5", label: "3 分钟了解 GPT-5", icon: "🧠" },
-  { key: "ai_jobs", label: "AI 会取代你的工作吗？", icon: "💼" },
-  { key: "custom", label: "我有自己的想法", icon: "✨" },
+  { key: "ai_hot", label: "今天的 AI 热点", icon: "🔥", desc: "龙虾自动抓取今日热点生成视频" },
+  { key: "gpt5", label: "3 分钟了解 GPT-5", icon: "🧠", desc: "快速解读 GPT-5 的核心升级" },
+  { key: "ai_jobs", label: "AI 与未来职场", icon: "💼", desc: "探讨 AI 对工作的实际影响" },
+  { key: "custom", label: "自由发挥", icon: "✨", desc: "输入任意主题，龙虾帮你生成" },
 ] as const;
 
 type TopicKey = (typeof TOPICS)[number]["key"];
 
 const GEN_PHASES = [
-  "正在生成脚本...",
-  "正在配音...",
-  "正在合成视频...",
-  "完成！🎉",
+  "正在创建你的 AI 频道...",
+  "正在准备第一条内容...",
+  "即将完成...",
+  "你的 AI UP 主已就绪 🎉",
 ] as const;
-const PHASE_DURATION_MS = 2000;
+const PHASE_DURATION_MS = 1500;
 
 const CONFETTI_PARTICLES = [
   { color: "#06b6d4", cx: "-40px", cy: "-50px" },
@@ -291,7 +295,7 @@ export default function OnboardingPage() {
               type="text"
               value={name}
               onChange={(e) => handleInputChange(e.target.value)}
-              placeholder="例如：AI科技日报"
+              placeholder="输入你的频道名称"
               maxLength={40}
               className="w-full rounded-lg border border-zinc-700 bg-zinc-900/60 px-4 py-4 text-lg text-zinc-50 placeholder:text-zinc-500 transition focus:border-cyan-500/50 focus:outline-none"
             />
@@ -310,11 +314,9 @@ export default function OnboardingPage() {
             </div>
           </div>
 
-          <div className="flex flex-wrap gap-2">
-            {QUICK_NAMES.map((qn) => (
-              <GhostButton key={qn} className="text-xs" onClick={() => handleQuickPick(qn)}>
-                {qn}
-              </GhostButton>
+          <div className="space-y-1.5">
+            {NAME_TIPS.map((tip) => (
+              <p key={tip} className="text-xs text-zinc-500">{tip}</p>
             ))}
           </div>
 
@@ -330,8 +332,11 @@ export default function OnboardingPage() {
       {step === 2 && (
         <GlassCard className="w-full max-w-lg animate-fade-in space-y-6">
           <h1 className="text-center text-2xl font-bold text-zinc-50">
-            选一个话题，龙虾帮你做第一条视频
+            选一个方向，开始你的第一条视频
           </h1>
+          <p className="text-center text-sm text-zinc-500">
+            这只是起点——之后你的 Agent 可以自由选题、生成任意内容
+          </p>
 
           {/* 话题网格 */}
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -343,7 +348,7 @@ export default function OnboardingPage() {
                   type="button"
                   onClick={() => handleTopicClick(t.key)}
                   className={`
-                    relative flex h-32 flex-col items-center justify-center gap-2 rounded-2xl border
+                    relative flex h-32 flex-col items-center justify-center gap-1.5 rounded-2xl border
                     bg-zinc-900/70 backdrop-blur transition-all duration-200
                     hover:scale-[1.02] hover:bg-white/[0.06]
                     ${active ? "border-cyan-400 shadow-[0_0_12px_rgba(6,182,212,0.2)]" : "border-zinc-800/80"}
@@ -356,6 +361,7 @@ export default function OnboardingPage() {
                   )}
                   <span className="text-3xl">{t.icon}</span>
                   <span className="text-sm font-medium text-zinc-200">{t.label}</span>
+                  <span className="text-[11px] text-zinc-500">{t.desc}</span>
                 </button>
               );
             })}
