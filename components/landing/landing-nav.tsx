@@ -9,6 +9,7 @@ const NAV_ITEMS = [
   { label: "样板", href: "#showcase" },
   { label: "流程", href: "#workflow" },
   { label: "开发者", href: "#developer" },
+  { label: "OpenClaw", href: "#openclaw" },
   { label: "FAQ", href: "#faq" },
 ];
 

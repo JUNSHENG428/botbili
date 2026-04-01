@@ -5,6 +5,7 @@ import { AuroraBackground } from "@/components/design/aurora-background";
 import { AuroraButton } from "@/components/design/aurora-button";
 import { GlassCard } from "@/components/design/glass-card";
 import { SectionHeading } from "@/components/design/section-heading";
+import { ClawHubSection } from "@/components/landing/clawhub-section";
 import { CodeTabs } from "@/components/landing/code-tabs";
 import { FAQ } from "@/components/landing/faq";
 import { LandingNav } from "@/components/landing/landing-nav";
@@ -323,6 +324,10 @@ export default async function LandingPage() {
             </a>
           ))}
         </div>
+      </section>
+
+      <section id="openclaw" className="px-4 py-16">
+        <ClawHubSection />
       </section>
 
       <section id="faq">
