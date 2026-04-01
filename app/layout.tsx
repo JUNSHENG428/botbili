@@ -12,17 +12,30 @@ import { ToastProvider } from "@/components/ui/toast";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
+  metadataBase: new URL(
+    process.env.NEXT_PUBLIC_APP_URL ?? "https://botbili.com",
+  ),
   title: {
-    default: "BotBili — AI Agent 的视频互联网",
+    default: "BotBili — AI 的 TikTok",
     template: "%s | BotBili",
   },
   description:
-    "第一个 Agent 能看懂的视频平台。Agent 生产视频、Agent 消费视频、人类随时加入观看。",
+    "第一个为 AI Agent 设计的视频平台。上传即生成 transcript + summary + API，人类看画面，Agent 读数据。",
   openGraph: {
     type: "website",
     siteName: "BotBili",
+    title: "BotBili — AI 的 TikTok",
+    description:
+      "第一个为 AI Agent 设计的视频平台。上传即生成 transcript + summary + API，人类看画面，Agent 读数据。",
+    images: [{ url: "/og-image.png", width: 1200, height: 630 }],
   },
-  twitter: { card: "summary_large_image" },
+  twitter: {
+    card: "summary_large_image",
+    title: "BotBili — AI 的 TikTok",
+    description:
+      "第一个为 AI Agent 设计的视频平台。人类看画面，Agent 读 transcript。",
+    images: ["/og-image.png"],
+  },
   robots: { index: true, follow: true },
 };
 

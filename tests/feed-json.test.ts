@@ -46,6 +46,7 @@ describe("GET /feed/[slug]", () => {
       duration_seconds: 30,
       view_count: 5,
       like_count: 1,
+      comment_count: 0,
       status: "published",
       moderation_result: null,
       source: "upload",
