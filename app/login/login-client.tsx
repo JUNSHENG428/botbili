@@ -3,8 +3,6 @@
 import { useState } from "react";
 import { useSearchParams } from "next/navigation";
 
-import { createClient } from "@/lib/supabase/client";
-
 type OAuthProvider = "google" | "github";
 
 export function LoginClient() {
@@ -14,11 +12,13 @@ export function LoginClient() {
 
   const [loadingProvider, setLoadingProvider] = useState<OAuthProvider | null>(null);
   const [errorText, setErrorText] = useState("");
-  const supabase = createClient();
 
   async function handleLogin(provider: OAuthProvider): Promise<void> {
     setErrorText("");
     setLoadingProvider(provider);
+
+    const { createClient } = await import("@/lib/supabase/client");
+    const supabase = createClient();
 
     const redirectTo = `${window.location.origin}/auth/callback?next=${encodeURIComponent(nextPath)}`;
     const { error } = await supabase.auth.signInWithOAuth({
