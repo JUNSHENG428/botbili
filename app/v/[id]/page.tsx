@@ -12,6 +12,7 @@ import { getFollowStatus } from "@/lib/follow-repository";
 import { createClientForServer } from "@/lib/supabase/server";
 import { getVideoById } from "@/lib/upload-repository";
 import { getVideoInteractionSummary } from "@/lib/video-interactions";
+import { getVideoCitedBy, getVideoReferences } from "@/lib/citations";
 
 interface VideoPageProps {
   params: Promise<{ id: string }>;
@@ -46,6 +47,11 @@ export default async function VideoPage({ params }: VideoPageProps) {
   const isOwner = user?.id === video.creator.owner_id;
   const initialFollowing = user?.id ? await getFollowStatus(user.id, video.creator.id) : false;
   const interactions = await getVideoInteractionSummary(video.id);
+
+  const [citedBy, references] = await Promise.all([
+    getVideoCitedBy(video.id).catch(() => []),
+    getVideoReferences(video.id).catch(() => []),
+  ]);
 
   return (
     <div className="space-y-5">
@@ -108,6 +114,57 @@ export default async function VideoPage({ params }: VideoPageProps) {
           </div>
         </div>
       </div>
+
+      {/* 引用关系 */}
+      {(references.length > 0 || citedBy.length > 0) && (
+        <div className="space-y-3">
+          <h2 className="text-sm font-semibold text-zinc-200">引用链</h2>
+          {references.length > 0 && (
+            <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-4">
+              <h3 className="mb-2 text-xs font-medium text-zinc-400">引用了 {references.length} 个视频</h3>
+              <div className="space-y-2">
+                {references.slice(0, 5).map((ref) => (
+                  <Link
+                    key={ref.id}
+                    href={`/v/${ref.video.id}`}
+                    className="flex items-center gap-3 rounded-lg border border-zinc-800 bg-zinc-900/80 p-3 transition hover:border-zinc-600"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-zinc-200 truncate">{ref.video.title}</p>
+                      <p className="text-xs text-zinc-500">{ref.video.creator.name}</p>
+                    </div>
+                    {ref.context && (
+                      <p className="text-xs text-zinc-500 max-w-[200px] truncate hidden sm:block">{ref.context}</p>
+                    )}
+                  </Link>
+                ))}
+              </div>
+            </div>
+          )}
+          {citedBy.length > 0 && (
+            <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-4">
+              <h3 className="mb-2 text-xs font-medium text-zinc-400">被 {citedBy.length} 个视频引用</h3>
+              <div className="space-y-2">
+                {citedBy.slice(0, 5).map((ref) => (
+                  <Link
+                    key={ref.id}
+                    href={`/v/${ref.video.id}`}
+                    className="flex items-center gap-3 rounded-lg border border-zinc-800 bg-zinc-900/80 p-3 transition hover:border-zinc-600"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-zinc-200 truncate">{ref.video.title}</p>
+                      <p className="text-xs text-zinc-500">{ref.video.creator.name}</p>
+                    </div>
+                    {ref.context && (
+                      <p className="text-xs text-zinc-500 max-w-[200px] truncate hidden sm:block">{ref.context}</p>
+                    )}
+                  </Link>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* 评论区 */}
       <CommentSection videoId={video.id} isLoggedIn={isLoggedIn} />

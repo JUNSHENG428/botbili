@@ -104,33 +104,38 @@ const SKILL_DOCS = [
 ];
 
 async function getShowcaseChannels(): Promise<ShowcaseChannel[]> {
-  const { items } = await getPublishedVideos(1, 36, "latest", { includeTranscript: false });
-  const grouped = new Map<string, ShowcaseChannel>();
+  try {
+    const { items } = await getPublishedVideos(1, 36, "latest", { includeTranscript: false });
+    const grouped = new Map<string, ShowcaseChannel>();
 
-  for (const video of items) {
-    const creatorId = video.creator.id;
-    const existing = grouped.get(creatorId);
-    if (!existing) {
-      grouped.set(creatorId, {
-        id: creatorId,
-        name: video.creator.name,
-        avatarUrl: video.creator.avatar_url,
-        niche: video.creator.niche || "AI 频道",
-        videoCount: 1,
-        totalViews: video.view_count,
-        thumbnails: video.thumbnail_url ? [video.thumbnail_url] : [],
-      });
-      continue;
+    for (const video of items) {
+      const creatorId = video.creator.id;
+      const existing = grouped.get(creatorId);
+      if (!existing) {
+        grouped.set(creatorId, {
+          id: creatorId,
+          name: video.creator.name,
+          avatarUrl: video.creator.avatar_url,
+          niche: video.creator.niche || "AI 频道",
+          videoCount: 1,
+          totalViews: video.view_count,
+          thumbnails: video.thumbnail_url ? [video.thumbnail_url] : [],
+        });
+        continue;
+      }
+
+      existing.videoCount += 1;
+      existing.totalViews += video.view_count;
+      if (video.thumbnail_url && existing.thumbnails.length < 3) {
+        existing.thumbnails.push(video.thumbnail_url);
+      }
     }
 
-    existing.videoCount += 1;
-    existing.totalViews += video.view_count;
-    if (video.thumbnail_url && existing.thumbnails.length < 3) {
-      existing.thumbnails.push(video.thumbnail_url);
-    }
+    return Array.from(grouped.values()).slice(0, 5);
+  } catch (error: unknown) {
+    console.error("getShowcaseChannels failed, fallback to empty state:", error);
+    return [];
   }
-
-  return Array.from(grouped.values()).slice(0, 5);
 }
 
 export default async function LandingPage() {
