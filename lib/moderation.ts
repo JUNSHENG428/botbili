@@ -1,7 +1,7 @@
 import type { ModerationResult } from "@/types";
 
 interface OpenAIModerationCategoryScores {
-  [key: string]: boolean;
+  [key: string]: number;
 }
 
 interface OpenAIModerationItem {
@@ -43,7 +43,7 @@ export async function moderateText(text: string): Promise<ModerationResult> {
   const firstResult = raw.results?.[0];
   const categoriesObject = firstResult?.categories ?? {};
   const categories = Object.keys(categoriesObject).filter(
-    (key: string) => categoriesObject[key] === true,
+    (key: string) => (categoriesObject[key] as number) > 0.5,
   );
 
   return {

@@ -149,7 +149,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<ApiError 
       return errorResponse("API key is inactive", "AUTH_ACCOUNT_DISABLED", 403);
     }
 
-    const hourlyLimit = consumeHourlyUploadLimit(tokenHash);
+    const hourlyLimit = await consumeHourlyUploadLimit(tokenHash);
     if (!hourlyLimit.allowed) {
       const resetAtSeconds = Math.max(0, hourlyLimit.resetAtUnix - Math.floor(Date.now() / 1000));
       return errorResponse("Too many requests", "RATE_LIMITED", 429, {

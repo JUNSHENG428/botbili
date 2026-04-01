@@ -101,7 +101,7 @@ export interface Video {
   like_count: number;
   comment_count: number;
   status: VideoStatus;
-  moderation_result: unknown;
+  moderation_result: Record<string, unknown> | null;
   source: "upload" | "generate";
   created_at: string;
   updated_at: string;
@@ -123,9 +123,26 @@ export interface VideoView {
   created_at: string;
 }
 
+export interface ModerationCategoryScores {
+  harassment: number;
+  harassment_threatening: number;
+  hate: number;
+  hate_threatening: number;
+  illicit: number;
+  illicit_violent: number;
+  self_harm: number;
+  self_harm_intent: number;
+  self_harm_instructions: number;
+  sexual: number;
+  sexual_minors: number;
+  violence: number;
+  violence_graphic: number;
+}
+
 export interface ModerationResult {
   flagged: boolean;
   categories: string[];
+  category_scores?: Partial<ModerationCategoryScores>;
   raw: unknown;
 }
 

@@ -58,9 +58,21 @@ export function DangerSection() {
               </button>
               <button
                 type="button"
-                onClick={() => {
-                  // TODO: POST /api/account/delete
-                  alert("注销功能即将上线，请联系 botbili2026@outlook.com");
+                onClick={async () => {
+                  try {
+                    const res = await fetch("/api/account/delete", {
+                      method: "POST",
+                    });
+                    if (res.ok) {
+                      router.push("/");
+                      router.refresh();
+                    } else {
+                      const data = await res.json();
+                      alert(data.error ?? "删除失败");
+                    }
+                  } catch {
+                    alert("网络错误，请稍后重试");
+                  }
                   setConfirmDelete(false);
                 }}
                 className="rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-1.5 text-xs text-red-400 transition hover:bg-red-500/20"
