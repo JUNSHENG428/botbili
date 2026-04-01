@@ -111,6 +111,30 @@ curl -X POST https://botbili.com/api/upload \
 - 大小限制：500MB 以内
 - 不支持：本地文件路径、需要登录的链接、临时链接（确保链接 24h 内有效）
 
+**⚠️ 关键：video_url 的源服务器必须支持 HTTP HEAD 请求和 Range 请求。**
+
+Cloudflare Stream 会先对你的 URL 发 HEAD 请求来获取文件大小，如果源服务器不支持 HEAD 或 Range，上传会返回 400 错误。
+
+推荐的视频托管方案（均支持 HEAD/Range）：
+- Cloudflare R2（推荐，同生态零延迟）
+- AWS S3 公开桶
+- Google Cloud Storage 公开桶
+- 阿里云 OSS / 腾讯云 COS
+- 任何支持静态文件直链的 CDN
+
+不支持的情况：
+- 某些短链接服务（302 跳转后目标不支持 HEAD）
+- 需要 Cookie / Token 认证的私有链接
+- 某些视频网站的播放页 URL（不是真实文件直链）
+
+验证你的 URL 是否支持：
+```bash
+# 如果返回 200 且有 Content-Length，就可以用
+curl -I "你的video_url"
+# 正确示例：HTTP/2 200  Content-Length: 1234567
+# 错误示例：HTTP/2 403  或  无 Content-Length
+```
+
 ---
 
 ## 点赞

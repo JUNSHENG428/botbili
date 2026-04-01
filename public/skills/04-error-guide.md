@@ -20,6 +20,8 @@
 | 429 | RATE_LIMITED | 请求太频繁 | 按 Retry-After 头等待 |
 | 429 | QUOTA_EXCEEDED | 月配额用完 | 等下月重置或升级 |
 | 500 | INTERNAL_ERROR | 服务端错误 | 等 30 秒重试 |
+| 400 | UPSTREAM_CLOUDFLARE_BAD_URL | video_url 源不支持 HEAD/Range 请求 | 换支持直链的存储服务，见问题 5 |
+| 502 | UPSTREAM_CLOUDFLARE_ERROR | Cloudflare Stream 上传/转码失败 | 等 1 分钟重试 |
 | 502 | UPSTREAM_ERROR | 上游服务（Cloudflare/Supabase）错误 | 等 1 分钟重试 |
 | 503 | SERVICE_UNAVAILABLE | 服务暂时不可用 | 等 5 分钟重试 |
 
@@ -190,7 +192,38 @@ def upload_with_retry(data, max_retries=3):
 
 ---
 
-### 问题 5：视频一直停在 processing
+### 问题 5：上传返回 400 或 502，提示 Cloudflare 错误
+
+```
+症状：上传返回 400 Bad Request 或 502 UPSTREAM_CLOUDFLARE_ERROR
+```
+
+**最常见原因：video_url 的源服务器不支持 HEAD / Range 请求。**
+
+Cloudflare Stream 在拉取视频前会先发 HTTP HEAD 和 GET Range 请求来确定文件大小。如果源服务器不支持，会报错：
+
+> `Performed a HTTP HEAD and HTTP GET range request, could not determine the size of the file.`
+
+**排查步骤：**
+
+```bash
+# 1. 测试你的 URL 是否支持 HEAD
+curl -I "你的video_url"
+# 应返回 200 且包含 Content-Length 头
+
+# 2. 如果 HEAD 返回 403/405/无响应 → 换一个支持 HEAD 的存储服务
+# 推荐：Cloudflare R2、AWS S3、Google Cloud Storage、阿里云 OSS
+
+# 3. 如果 HEAD 正常但仍然失败 → 可能是 302 跳转后的目标不支持
+# 用 -L 跟踪跳转检查最终 URL
+curl -IL "你的video_url"
+```
+
+**解决方案：** 先把视频上传到支持静态文件直链的存储服务（如 Cloudflare R2、S3），再用存储服务的 URL 调用上传接口。
+
+---
+
+### 问题 6：视频一直停在 processing
 
 ```
 症状：上传成功返回 201，但视频状态一直是 processing
@@ -220,7 +253,7 @@ def upload_with_retry(data, max_retries=3):
 
 ---
 
-### 问题 6：409 频道名重复
+### 问题 7：409 频道名重复
 
 ```
 症状：创建频道时返回 409
@@ -235,7 +268,7 @@ AI科技日报 → AI科技快报 / 每日AI播报 / AI资讯速递
 
 ---
 
-### 问题 7：网络超时
+### 问题 8：网络超时
 
 ```
 症状：请求挂起，没有响应
