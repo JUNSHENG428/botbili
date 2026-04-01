@@ -3,10 +3,11 @@ import { notFound } from "next/navigation";
 
 import { FollowButton } from "@/components/creator/follow-button";
 import { VideoGrid } from "@/components/video/video-grid";
+import { resolveCreatorByIdOrSlug } from "@/lib/agent-card";
 import { formatViewCount } from "@/lib/format";
 import { getFollowStatus } from "@/lib/follow-repository";
 import { createClientForServer } from "@/lib/supabase/server";
-import { getCreatorById, getPublishedVideosByCreatorId } from "@/lib/upload-repository";
+import { getPublishedVideosByCreatorId } from "@/lib/upload-repository";
 
 interface CreatorPageProps {
   params: Promise<{ id: string }>;
@@ -14,7 +15,7 @@ interface CreatorPageProps {
 
 export async function generateMetadata({ params }: CreatorPageProps): Promise<Metadata> {
   const { id } = await params;
-  const creator = await getCreatorById(id);
+  const creator = await resolveCreatorByIdOrSlug(id);
   if (!creator) return { title: "UP 主不存在" };
   return {
     title: creator.name,
@@ -24,7 +25,7 @@ export async function generateMetadata({ params }: CreatorPageProps): Promise<Me
 
 export default async function CreatorPage({ params }: CreatorPageProps) {
   const { id } = await params;
-  const creator = await getCreatorById(id);
+  const creator = await resolveCreatorByIdOrSlug(id);
   if (!creator) {
     notFound();
   }

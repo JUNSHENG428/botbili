@@ -1,14 +1,8 @@
 import { NextResponse } from "next/server";
 
 import { apiErrorResponse, withRateLimitHeaders } from "@/lib/api-response";
-import { resolveCreatorByIdOrSlug } from "@/lib/agent-card";
-import { getPublishedVideosByCreatorId } from "@/lib/upload-repository";
-import type { ApiError, Creator, VideoRecord } from "@/types";
-
-interface CreatorDetailResponse {
-  creator: Creator;
-  videos: VideoRecord[];
-}
+import { generateAgentCard } from "@/lib/agent-card";
+import { getBaseUrl } from "@/lib/utils";
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -17,7 +11,7 @@ interface RouteContext {
 export async function GET(
   _request: Request,
   context: RouteContext,
-): Promise<NextResponse<ApiError | CreatorDetailResponse>> {
+): Promise<NextResponse> {
   try {
     const { id } = await context.params;
     if (!id) {
@@ -28,8 +22,8 @@ export async function GET(
       });
     }
 
-    const creator = await resolveCreatorByIdOrSlug(id);
-    if (!creator) {
+    const agentCard = await generateAgentCard(id, getBaseUrl());
+    if (!agentCard) {
       return apiErrorResponse({
         message: "Creator not found",
         code: "RESOURCE_NOT_FOUND",
@@ -37,10 +31,16 @@ export async function GET(
       });
     }
 
-    const videos = await getPublishedVideosByCreatorId(creator.id);
-    return withRateLimitHeaders(NextResponse.json({ creator, videos }));
+    return withRateLimitHeaders(
+      NextResponse.json(agentCard, {
+        headers: {
+          "Content-Type": "application/json; charset=utf-8",
+          "Cache-Control": "public, max-age=3600",
+        },
+      }),
+    );
   } catch (error: unknown) {
-    console.error("GET /api/creators/[id] failed:", error);
+    console.error("GET /api/creators/[id]/agent.json failed:", error);
     return apiErrorResponse({
       message: "Internal server error",
       code: "INTERNAL_ERROR",

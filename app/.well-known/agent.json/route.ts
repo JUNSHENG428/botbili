@@ -3,7 +3,6 @@ import { NextResponse } from "next/server";
 import { apiErrorResponse } from "@/lib/api-response";
 import { discoverAgents, generateAgentCard } from "@/lib/agent-card";
 import { getBaseUrl } from "@/lib/utils";
-import type { ApiError } from "@/types";
 
 /**
  * GET /.well-known/agent.json

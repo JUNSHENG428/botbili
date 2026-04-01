@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { apiErrorResponse, withRateLimitHeaders } from "@/lib/api-response";
-import { getCreatorById, getPublishedVideosByCreatorId } from "@/lib/upload-repository";
+import { resolveCreatorByIdOrSlug } from "@/lib/agent-card";
+import { getPublishedVideosByCreatorId } from "@/lib/upload-repository";
+import { getBaseUrl } from "@/lib/utils";
 import type { ApiError } from "@/types";
 
 interface JsonFeedItem {
@@ -29,12 +31,12 @@ interface RouteContext {
   params: Promise<{ slug: string }>;
 }
 
-function parseCreatorIdFromSlug(slug: string): string | null {
+function parseCreatorIdentifierFromSlug(slug: string): string | null {
   if (!slug.endsWith(".json")) {
     return null;
   }
-  const creatorId = slug.slice(0, -5);
-  return creatorId.length > 0 ? creatorId : null;
+  const creatorIdentifier = slug.slice(0, -5);
+  return creatorIdentifier.length > 0 ? creatorIdentifier : null;
 }
 
 export async function GET(
@@ -43,16 +45,16 @@ export async function GET(
 ): Promise<NextResponse<ApiError | JsonFeedResponse>> {
   try {
     const { slug } = await context.params;
-    const creatorId = parseCreatorIdFromSlug(slug);
-    if (!creatorId) {
+    const creatorIdentifier = parseCreatorIdentifierFromSlug(slug);
+    if (!creatorIdentifier) {
       return apiErrorResponse({
-        message: "Invalid creator id",
+        message: "Invalid creator identifier",
         code: "VALIDATION_CREATOR_ID_INVALID",
         status: 400,
       });
     }
 
-    const creator = await getCreatorById(creatorId);
+    const creator = await resolveCreatorByIdOrSlug(creatorIdentifier);
     if (!creator) {
       return apiErrorResponse({
         message: "Creator not found",
@@ -61,7 +63,6 @@ export async function GET(
       });
     }
 
-    const { getBaseUrl } = await import("@/lib/utils");
     const appUrl = getBaseUrl();
     const videos = await getPublishedVideosByCreatorId(creator.id);
     const items: JsonFeedItem[] = videos.map((video) => ({
@@ -79,8 +80,8 @@ export async function GET(
     const feed: JsonFeedResponse = {
       version: "https://jsonfeed.org/version/1.1",
       title: `${creator.name} - BotBili`,
-      home_page_url: `${appUrl}/c/${creator.id}`,
-      feed_url: `${appUrl}/feed/${creator.id}.json`,
+      home_page_url: `${appUrl}/c/${creator.slug}`,
+      feed_url: `${appUrl}/feed/${creator.slug}.json`,
       description: creator.bio || `${creator.name} 的 BotBili 视频 Feed`,
       items,
     };

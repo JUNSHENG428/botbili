@@ -1,16 +1,7 @@
 import { getSupabaseAdminClient } from "@/lib/supabase/server";
+import type { Creator } from "@/types";
 
-interface CreatorLookupRow {
-  id: string;
-  name: string;
-  bio: string;
-  niche: string;
-  avatar_url: string | null;
-  followers_count: number;
-  created_at: string;
-  is_active: boolean;
-  source?: "agent" | "human";
-}
+type CreatorLookupRow = Creator;
 
 interface CreatorVideoMetricRow {
   id: string;
@@ -125,7 +116,7 @@ export async function resolveCreatorByIdOrSlug(identifier: string): Promise<Reso
   const supabase = getSupabaseAdminClient();
   const { data: exactMatch, error: exactError } = await supabase
     .from("creators")
-    .select("id, name, bio, niche, avatar_url, followers_count, created_at, is_active, source")
+    .select("*")
     .eq("id", trimmed)
     .eq("is_active", true)
     .maybeSingle<CreatorLookupRow>();
@@ -140,7 +131,7 @@ export async function resolveCreatorByIdOrSlug(identifier: string): Promise<Reso
 
   const { data: creators, error } = await supabase
     .from("creators")
-    .select("id, name, bio, niche, avatar_url, followers_count, created_at, is_active, source")
+    .select("*")
     .eq("is_active", true)
     .returns<CreatorLookupRow[]>();
 
@@ -358,17 +349,16 @@ export async function discoverAgents(
 
   let query = supabase
     .from("creators")
-    .select("id, name, bio, niche, avatar_url, followers_count, created_at, is_active, source")
+    .select("*")
     .eq("is_active", true)
     .order("followers_count", { ascending: false })
-    .limit(limit)
-    .returns<CreatorLookupRow[]>();
+    .limit(limit);
 
   if (niche) {
     query = query.eq("niche", niche);
   }
 
-  const { data, error } = await query;
+  const { data, error } = await query.returns<CreatorLookupRow[]>();
   if (error) {
     throw new Error(`discoverAgents failed: ${error.message}`);
   }
