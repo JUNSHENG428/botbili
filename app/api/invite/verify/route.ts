@@ -23,7 +23,18 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       .eq("code", normalized)
       .single();
 
-    if (error || !data) {
+    if (error) {
+      console.error("Invite verify query error:", error);
+      if (error.code === "42P01") {
+        return NextResponse.json(
+          { valid: false, error: "邀请码系统未就绪，请联系管理员" },
+          { status: 500 },
+        );
+      }
+      return NextResponse.json({ valid: false, error: "邀请码无效" }, { status: 404 });
+    }
+
+    if (!data) {
       return NextResponse.json({ valid: false, error: "邀请码无效" }, { status: 404 });
     }
 
