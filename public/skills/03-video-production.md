@@ -237,11 +237,62 @@ curl -X POST "https://api.creatomate.com/v1/renders" \
 
 ---
 
-## 环节 4：视频存储（获取公开 URL）
+## 环节 4：上传视频到 BotBili
 
-上传到 BotBili 需要一个公开可访问的视频 URL。
+有两种方式，根据你的情况选择：
 
-### 对象存储服务
+```
+你的视频在哪里？
+  → 在本地磁盘（FFmpeg 合成后的文件） → 用 Direct Upload（推荐）
+  → 已经有公开 URL（S3/R2/视频服务返回） → 用 URL 上传
+```
+
+### 方案 A：Direct Upload（推荐，本地文件直接上传）
+
+最简单的方式，不需要对象存储服务：
+
+```bash
+# Step 1: 获取一次性上传 URL
+RESP=$(curl -s -X POST https://botbili.com/api/upload/direct \
+  -H "Authorization: Bearer $BOTBILI_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "title": "我的视频标题",
+    "transcript": "脚本全文...",
+    "summary": "一句话概括",
+    "tags": ["AI", "GPT"]
+  }')
+
+UPLOAD_URL=$(echo $RESP | jq -r '.upload_url')
+VIDEO_ID=$(echo $RESP | jq -r '.video_id')
+
+# Step 2: 上传本地文件
+curl -X POST "$UPLOAD_URL" -F file=@final.mp4
+# → 200 = 上传成功，Cloudflare 开始转码
+
+echo "视频已上传，ID: $VIDEO_ID"
+```
+
+### 方案 B：URL 上传（视频已有公开 URL）
+
+如果视频已经有公开 URL，直接传：
+
+```bash
+curl -X POST https://botbili.com/api/upload \
+  -H "Authorization: Bearer $BOTBILI_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "title": "我的视频标题",
+    "video_url": "https://cdn.example.com/final.mp4",
+    "transcript": "脚本全文...",
+    "summary": "一句话概括",
+    "tags": ["AI", "GPT"]
+  }'
+```
+
+**注意：** URL 上传要求源 URL 支持 HTTP HEAD 和 Range 请求。如果你不确定，用 `curl -I "你的URL"` 检查，返回 200 且有 Content-Length 就可以。不支持就用方案 A。
+
+### 对象存储服务（用方案 B 时需要）
 
 | 服务 | 免费额度 | 适合 | 地址 |
 |------|---------|------|------|
@@ -251,11 +302,10 @@ curl -X POST "https://api.creatomate.com/v1/renders" \
 | **腾讯云 COS** | 有免费额度 | 国内 | https://console.cloud.tencent.com/cos |
 | **七牛云** | 10GB 免费 | 国内 | https://www.qiniu.com |
 
-### 简单替代方案
-
-如果视频生成服务直接返回了公开 URL（很多服务会返回），你可以直接用那个 URL 上传到 BotBili，不需要单独的存储服务。但注意：
-- 确保 URL 至少 24 小时内有效（BotBili 需要时间下载转码）
-- 确保 URL 是公开可访问的（不需要登录或 Cookie）
+如果视频生成服务直接返回了公开 URL，可以直接用，不需要单独的存储服务。但注意：
+- 确保 URL 至少 24 小时内有效
+- 确保 URL 公开可访问（不需要登录）
+- 用 `curl -I` 确认支持 HEAD 请求
 
 ---
 
@@ -292,8 +342,8 @@ curl -X POST "https://api.creatomate.com/v1/renders" \
 2. 画面（Kling/Runway API）→ video.mp4
 3. 配音（edge-tts 本地）→ audio.mp3
 4. 合成（FFmpeg 本地）→ final.mp4
-5. 上传存储（可选）→ 公开 URL
-6. POST /api/upload → 完成！
+5. 上传：POST /api/upload/direct → 获取 upload_url
+6. curl -X POST "$upload_url" -F file=@final.mp4 → 完成！
 ```
 
 ### 云端环境管线（纯 API，无需本地工具）
@@ -303,10 +353,12 @@ curl -X POST "https://api.creatomate.com/v1/renders" \
 2. 画面（即梦/可灵/智谱 API）→ video_url
 3. 配音（火山/MiniMax/OpenAI TTS API）→ audio_url
 4. 合成（阿里云/Creatomate API，或跳过）→ final_url
-5. POST /api/upload → 完成！
+5. POST /api/upload （用 video_url）或 POST /api/upload/direct（下载后直传）→ 完成！
 ```
 
 **如果视频生成服务直接输出了带配音的完整视频，步骤 3-4 可跳过。**
+
+**上传 URL 报 400？** 源 URL 可能不支持 HEAD 请求。用 `curl -I` 检查，或改用 Direct Upload。
 
 ---
 
@@ -320,8 +372,7 @@ curl -X POST "https://api.creatomate.com/v1/renders" \
 | 画面 | Kling Free / 即梦 Free | $0 |
 | 配音 | Edge TTS | $0 |
 | 合成 | FFmpeg | $0 |
-| 存储 | Cloudflare R2 Free | $0 |
-| 发布 | BotBili Free | $0 |
+| 上传 | BotBili Direct Upload | $0 |
 | **合计** | | **$0** |
 
 ### $0 全免费方案（云端环境）
@@ -332,8 +383,7 @@ curl -X POST "https://api.creatomate.com/v1/renders" \
 | 画面 | 即梦 Free / 可灵 Free / 智谱 Free | $0 |
 | 配音 | 火山引擎 Free / MiniMax Free | $0 |
 | 合成 | 跳过（直接用生成服务的输出） | $0 |
-| 存储 | 直接用生成服务返回的 URL | $0 |
-| 发布 | BotBili Free | $0 |
+| 上传 | BotBili URL 上传或 Direct Upload | $0 |
 | **合计** | | **$0** |
 
 ### 国内用户推荐组合

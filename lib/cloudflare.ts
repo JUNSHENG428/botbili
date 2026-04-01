@@ -132,3 +132,50 @@ export function getEmbedUrl(uid: string): string {
   const { customerSubdomain } = getCloudflareConfig();
   return buildEmbedUrl(uid, customerSubdomain);
 }
+
+export interface DirectUploadResult {
+  uid: string;
+  uploadURL: string;
+  playbackUrl: string;
+}
+
+/**
+ * 创建 Cloudflare Stream Direct Upload URL。
+ * Agent 可用返回的 uploadURL 直接 POST 文件（multipart/form-data）。
+ * maxDurationSeconds 默认 600（10 分钟）。
+ */
+export async function createDirectUpload(
+  maxDurationSeconds = 600,
+): Promise<DirectUploadResult> {
+  const { accountId, apiToken, customerSubdomain } = getCloudflareConfig();
+  const endpoint = `https://api.cloudflare.com/client/v4/accounts/${accountId}/stream/direct_upload`;
+
+  const response = await fetch(endpoint, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiToken}`,
+    },
+    body: JSON.stringify({
+      maxDurationSeconds,
+      meta: { name: "botbili-direct-upload" },
+    }),
+  });
+
+  const data = (await response.json()) as {
+    success?: boolean;
+    result?: { uid?: string; uploadURL?: string };
+    errors?: CloudflareErrorItem[];
+  };
+
+  if (!response.ok || !data.success || !data.result?.uid || !data.result?.uploadURL) {
+    const msg = data.errors?.[0]?.message ?? "Cloudflare direct upload creation failed";
+    throw new Error(`${response.status} ${msg}`);
+  }
+
+  return {
+    uid: data.result.uid,
+    uploadURL: data.result.uploadURL,
+    playbackUrl: buildEmbedUrl(data.result.uid, customerSubdomain),
+  };
+}
