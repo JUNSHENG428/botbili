@@ -34,25 +34,34 @@ export async function getSuggestions(
   const supabase = getSupabaseAdminClient();
 
   // 获取热门 tags（趋势）
-  const { data: trendingTags } = await supabase
-    .rpc("get_trending_tags", { days: 7 })
-    .returns<Array<{ tag: string; count: number; growth: number }>>();
+  const { data: trendingTagsRaw } = await supabase.rpc("get_trending_tags", { days: 7 });
+  
+  interface TrendingTagRow {
+    tag: string;
+    count: number;
+    growth: number;
+  }
+  
+  const trendingTags = (trendingTagsRaw ?? []) as unknown as TrendingTagRow[];
 
   // 获取该领域最近高播放视频的选题
-  const { data: hotVideos } = await supabase
+  interface HotVideoRow {
+    id: string;
+    title: string;
+    tags: string[];
+    view_count: number;
+    summary: string | null;
+    creator: { niche?: string } | null;
+  }
+
+  const { data: hotVideosRaw } = await supabase
     .from("videos")
     .select("id, title, tags, view_count, summary, creator:creators!videos_creator_id_fkey(niche)")
     .eq("status", "published")
     .order("view_count", { ascending: false })
-    .limit(50)
-    .returns<Array<{
-      id: string;
-      title: string;
-      tags: string[];
-      view_count: number;
-      summary: string | null;
-      creator: { niche?: string } | null;
-    }>>();
+    .limit(50);
+  
+  const hotVideos = (hotVideosRaw ?? []) as unknown as HotVideoRow[];
 
   // 如果有 creatorId，获取该频道已有的 tags（避免重复）
   let existingTags: string[] = [];
@@ -89,7 +98,7 @@ export async function getSuggestions(
       if (existing) {
         existing.count += 1;
         existing.views += video.view_count;
-        if (existing.videos.length < 3) {
+        if (existing.videos && existing.videos.length < 3) {
           existing.videos.push(video);
         }
       } else {

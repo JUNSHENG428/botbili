@@ -119,30 +119,32 @@ export async function searchVideosSemantic(
   const queryEmbedding = await generateEmbedding(query);
 
   // 调用 RPC 函数进行向量搜索
-  const { data: results, error } = await supabase
-    .rpc("search_videos_by_embedding", {
-      query_embedding: JSON.stringify(queryEmbedding),
-      match_limit: limit,
-    })
-    .returns<Array<{
-      id: string;
-      title: string;
-      summary: string | null;
-      transcript: string | null;
-      similarity: number;
-      creator: {
-        id: string;
-        name: string;
-        slug: string;
-        avatar_url: string | null;
-      };
-    }>>();
+  const { data: results, error } = await supabase.rpc("search_videos_by_embedding", {
+    query_embedding: JSON.stringify(queryEmbedding),
+    match_limit: limit,
+  });
 
   if (error) {
     throw new Error(`Semantic search failed: ${error.message}`);
   }
 
-  return (results ?? []).map((r) => ({
+  interface SearchResultRow {
+    id: string;
+    title: string;
+    summary: string | null;
+    transcript: string | null;
+    similarity: number;
+    creator: {
+      id: string;
+      name: string;
+      slug: string;
+      avatar_url: string | null;
+    };
+  }
+
+  const typedResults = (results ?? []) as unknown as SearchResultRow[];
+
+  return typedResults.map((r) => ({
     video: {
       id: r.id,
       title: r.title,

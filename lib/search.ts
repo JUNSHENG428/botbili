@@ -67,36 +67,38 @@ async function searchSemantic(query: string, limit: number): Promise<SearchResul
   try {
     const queryEmbedding = await generateEmbedding(query);
 
-    const { data: results, error } = await supabase
-      .rpc("search_videos_by_embedding", {
-        query_embedding: JSON.stringify(queryEmbedding),
-        match_limit: limit,
-      })
-      .returns<Array<{
-        id: string;
-        title: string;
-        summary: string | null;
-        transcript: string | null;
-        tags: string[];
-        view_count: number;
-        created_at: string;
-        similarity: number;
-        creator_id: string;
-        creator_name: string;
-      }>>();
+    const { data: results, error } = await supabase.rpc("search_videos_by_embedding", {
+      query_embedding: JSON.stringify(queryEmbedding),
+      match_limit: limit,
+    });
 
     if (error) {
       console.warn("Semantic search failed, falling back to keyword search:", error);
       return [];
     }
 
-    return (results ?? []).map((r) => ({
+    interface SemanticResultRow {
+      id: string;
+      title: string;
+      summary: string | null;
+      transcript: string | null;
+      tags: string[];
+      view_count: number;
+      created_at: string;
+      similarity: number;
+      creator_id: string;
+      creator_name: string;
+    }
+
+    const typedResults = (results ?? []) as unknown as SemanticResultRow[];
+
+    return typedResults.map((r: SemanticResultRow) => ({
       video_id: r.id,
       title: r.title,
       creator_name: r.creator_name,
       creator_id: r.creator_id,
-      match_type: "semantic",
-      snippet: r.summary ?? r.transcript?.slice(0, 150) + "..." ?? "",
+      match_type: "semantic" as const,
+      snippet: r.summary ?? (r.transcript ? r.transcript.slice(0, 150) + "..." : ""),
       relevance_score: Math.round(r.similarity * 1000) / 1000,
       created_at: r.created_at,
       view_count: r.view_count,
@@ -113,15 +115,16 @@ async function searchSemantic(query: string, limit: number): Promise<SearchResul
 async function searchKeyword(query: string, limit: number): Promise<SearchResult[]> {
   const supabase = getSupabaseAdminClient();
 
-  const { data: videos, error } = await supabase
+  const { data: videosRaw, error } = await supabase
     .from("videos")
     .select(
       "id, title, transcript, summary, tags, created_at, view_count, creator:creators!videos_creator_id_fkey(id, name)"
     )
     .eq("status", "published")
     .order("created_at", { ascending: false })
-    .limit(200)
-    .returns<VideoSearchRow[]>();
+    .limit(200);
+
+  const videos = (videosRaw ?? []) as unknown as VideoSearchRow[];
 
   if (error) {
     throw new Error(`searchVideos failed: ${error.message}`);
