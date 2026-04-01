@@ -52,6 +52,10 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
     return NextResponse.redirect(loginUrl);
   }
 
+  if (user && ADMIN_ROUTES.some((r) => pathname.startsWith(r)) && user.email !== ADMIN_EMAIL) {
+    return NextResponse.redirect(new URL("/feed", request.url));
+  }
+
   if (user && pathname !== "/invite" && INVITE_ROUTES.some((r) => pathname.startsWith(r))) {
     const { data: usage } = await supabase
       .from("invite_code_usage")
