@@ -34,6 +34,12 @@ interface PublishedVideosQueryRow extends VideoRecord {
 
 type PublishedVideosQueryRowWithoutTranscript = Omit<PublishedVideosQueryRow, "transcript">;
 
+export interface VideoAccessRecord {
+  id: string;
+  creator_id: string;
+  status: VideoStatus;
+}
+
 interface GetPublishedVideosOptionsWithTranscript {
   includeTranscript: true;
 }
@@ -158,6 +164,18 @@ export async function createVideo(
   }
 
   return data;
+}
+
+/**
+ * 删除视频记录。
+ */
+export async function deleteVideoRecord(videoId: string): Promise<void> {
+  const supabase = getSupabaseAdminClient();
+  const { error } = await supabase.from("videos").delete().eq("id", videoId);
+
+  if (error) {
+    throw new Error(`deleteVideoRecord failed: ${error.message}`);
+  }
 }
 
 /**
@@ -329,6 +347,66 @@ export async function getVideoById(videoId: string): Promise<VideoWithCreator | 
       followers_count: rawVideo.creator.followers_count,
     },
   };
+}
+
+/**
+ * 获取视频的最小访问控制信息，不产生额外副作用。
+ */
+export async function getVideoAccessRecord(videoId: string): Promise<VideoAccessRecord | null> {
+  const supabase = getSupabaseAdminClient();
+  const { data, error } = await supabase
+    .from("videos")
+    .select("id, creator_id, status")
+    .eq("id", videoId)
+    .maybeSingle<VideoAccessRecord>();
+
+  if (error) {
+    throw new Error(`getVideoAccessRecord failed: ${error.message}`);
+  }
+
+  return data;
+}
+
+/**
+ * 检查某个视频是否归指定 creator 所有。
+ */
+export async function creatorOwnsVideo(videoId: string, creatorId: string): Promise<boolean> {
+  const supabase = getSupabaseAdminClient();
+  const { data, error } = await supabase
+    .from("videos")
+    .select("id")
+    .eq("id", videoId)
+    .eq("creator_id", creatorId)
+    .maybeSingle<{ id: string }>();
+
+  if (error) {
+    throw new Error(`creatorOwnsVideo failed: ${error.message}`);
+  }
+
+  return Boolean(data);
+}
+
+/**
+ * 批量获取已发布视频的 ID，用于校验引用目标。
+ */
+export async function getPublishedVideoIds(videoIds: string[]): Promise<string[]> {
+  const uniqueIds = Array.from(new Set(videoIds.filter((videoId) => videoId.trim().length > 0)));
+  if (uniqueIds.length === 0) {
+    return [];
+  }
+
+  const supabase = getSupabaseAdminClient();
+  const { data, error } = await supabase
+    .from("videos")
+    .select("id")
+    .in("id", uniqueIds)
+    .eq("status", "published");
+
+  if (error) {
+    throw new Error(`getPublishedVideoIds failed: ${error.message}`);
+  }
+
+  return (data ?? []).map((video) => (video as { id: string }).id);
 }
 
 /**

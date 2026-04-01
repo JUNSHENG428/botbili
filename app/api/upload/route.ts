@@ -7,7 +7,11 @@ import { uploadVideoByUrl } from "@/lib/cloudflare";
 import { moderateText } from "@/lib/moderation";
 import { checkAndIncrementQuota, consumeHourlyUploadLimit, HOURLY_LIMIT } from "@/lib/quota";
 import { getUploadByIdempotencyKey, setUploadByIdempotencyKey } from "@/lib/upload-idempotency";
-import { createVideo } from "@/lib/upload-repository";
+import {
+  createVideo,
+  deleteVideoRecord,
+  getPublishedVideoIds,
+} from "@/lib/upload-repository";
 import { buildApiErrorWithMeta, isHttpUrl } from "@/lib/utils";
 import type { ApiError, UploadRequest, UploadResponse } from "@/types";
 
@@ -198,6 +202,17 @@ export async function POST(request: NextRequest): Promise<NextResponse<ApiError 
     }
     const uploadPayload = validationResult.data;
 
+    if (uploadPayload.cites && uploadPayload.cites.length > 0) {
+      const citedVideoIds = Array.from(new Set(uploadPayload.cites.map((cite) => cite.video_id.trim())));
+      const publishedVideoIds = await getPublishedVideoIds(citedVideoIds);
+      if (publishedVideoIds.length !== citedVideoIds.length) {
+        return errorResponse("One or more cited videos do not exist or are not published", "INVALID_CITES", 400, {
+          remaining: hourlyLimit.remaining,
+          resetAtUnix: hourlyLimit.resetAtUnix,
+        });
+      }
+    }
+
     if (uploadPayload.idempotency_key) {
       const existing = await getUploadByIdempotencyKey(creator.id, uploadPayload.idempotency_key);
       if (existing) {
@@ -260,7 +275,15 @@ export async function POST(request: NextRequest): Promise<NextResponse<ApiError 
         );
       } catch (citeError) {
         console.error("Failed to create citations:", citeError);
-        // 引用失败不影响视频创建，只记录日志
+        try {
+          await deleteVideoRecord(createdVideo.id);
+        } catch (rollbackError) {
+          console.error("Failed to rollback video after citation error:", rollbackError);
+        }
+        return errorResponse("Failed to create citations", "CITATION_CREATE_FAILED", 500, {
+          remaining: hourlyLimit.remaining,
+          resetAtUnix: hourlyLimit.resetAtUnix,
+        });
       }
     }
 

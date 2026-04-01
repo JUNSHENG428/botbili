@@ -68,7 +68,3 @@ $$;
 INSERT INTO public.invite_codes (code, source, max_uses, created_by)
 VALUES ('OPENCLAW2026', 'openclaw', 50, 'system')
 ON CONFLICT (code) DO NOTHING;
-
-INSERT INTO public.invite_codes (code, source, max_uses, created_by)
-VALUES ('LAORUI2026', 'wechat', 50, 'system')
-ON CONFLICT (code) DO NOTHING;

@@ -7,7 +7,11 @@ import {
   getVideoCitedBy,
   getVideoReferences,
 } from "@/lib/citations";
-import { verifyApiKey } from "@/lib/upload-repository";
+import {
+  creatorOwnsVideo,
+  getPublishedVideoIds,
+  verifyApiKey,
+} from "@/lib/upload-repository";
 import type { ApiError } from "@/types";
 
 /**
@@ -135,6 +139,26 @@ export async function POST(
       });
     }
 
+    const ownsVideo = await creatorOwnsVideo(id, creator.id);
+    if (!ownsVideo) {
+      return apiErrorResponse({
+        message: "You can only manage citations for your own videos",
+        code: "VIDEO_FORBIDDEN",
+        status: 403,
+      });
+    }
+
+    const citedVideoIds = Array.from(new Set(citations.map((citation) => citation.video_id.trim())));
+    const publishedVideoIds = await getPublishedVideoIds(citedVideoIds);
+
+    if (publishedVideoIds.length !== citedVideoIds.length) {
+      return apiErrorResponse({
+        message: "One or more cited videos do not exist or are not published",
+        code: "CITATION_TARGET_INVALID",
+        status: 400,
+      });
+    }
+
     const created = await createCitations(
       id,
       citations.map((c) => ({
@@ -161,6 +185,14 @@ export async function POST(
         message: (error as Error).message,
         code: "VALIDATION_SELF_CITATION",
         status: 400,
+      });
+    }
+
+    if ((error as Error).message === "You can only manage citations for your own videos") {
+      return apiErrorResponse({
+        message: "You can only manage citations for your own videos",
+        code: "VIDEO_FORBIDDEN",
+        status: 403,
       });
     }
 

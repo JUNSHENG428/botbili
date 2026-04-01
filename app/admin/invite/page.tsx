@@ -179,7 +179,7 @@ export default function AdminInvitePage() {
             >
               <option value="manual">手动发放</option>
               <option value="openclaw">OpenClaw</option>
-              <option value="wechat">微信</option>
+              <option value="wechat_mp">微信公众号</option>
               <option value="producthunt">Product Hunt</option>
             </select>
           </div>

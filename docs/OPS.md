@@ -123,7 +123,7 @@ corepack pnpm test
 - RLS 策略
 - `handle_new_user()` Trigger（自动创建 profile）
 - `redeem_invite_code()` RPC 函数
-- 预置邀请码（OPENCLAW2026、LAORUI2026）
+- 预置邀请码（OPENCLAW2026）+ 微信公众号动态邀请码链路
 
 ### 4.3 种子数据
 
@@ -331,9 +331,16 @@ curl -s "${NEXT_PUBLIC_SUPABASE_URL}/rest/v1/videos?select=id&limit=1" \
 | 邀请码 | 来源渠道 | 最大使用次数 |
 |--------|---------|-------------|
 | `OPENCLAW2026` | OpenClaw 社区 | 50 |
-| `LAORUI2026` | 微信视频号 | 50 |
 
-### 9.2 邀请码流程
+### 9.2 微信公众号动态邀请码
+
+- 关注「老瑞的ai百宝箱」微信公众号
+- 用户回复 `BotBili`
+- 微信服务器将消息转发到 `/api/wechat/webhook`
+- 服务端按 `wechat:<openid>` 生成或复用一个一次性邀请码
+- 回复该用户专属邀请码，并在 `invite_codes.created_by` 中保留来源追踪
+
+### 9.3 邀请码流程
 
 ```
 用户登录 → 访问 /create 或 /dashboard
@@ -344,7 +351,7 @@ curl -s "${NEXT_PUBLIC_SUPABASE_URL}/rest/v1/videos?select=id&limit=1" \
 
 > **当前状态**：Middleware 中邀请码拦截逻辑为 TODO 状态。如需启用，取消 middleware.ts 中第 25-28 行的注释并实现查询逻辑。
 
-### 9.3 取消邀请制
+### 9.4 取消邀请制
 
 将来要开放注册时，只需删除 middleware.ts 中的邀请码检查逻辑即可，不影响其他功能。
 

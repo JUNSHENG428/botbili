@@ -8,7 +8,7 @@ import {
   getVideoRatingStats,
   getVideoRatings,
 } from "@/lib/ratings";
-import { verifyApiKey } from "@/lib/upload-repository";
+import { getVideoAccessRecord, verifyApiKey } from "@/lib/upload-repository";
 import type { ApiError } from "@/types";
 
 /**
@@ -103,6 +103,23 @@ export async function POST(
       });
     }
 
+    const video = await getVideoAccessRecord(id);
+    if (!video || video.status !== "published") {
+      return apiErrorResponse({
+        message: "Video not found or not published",
+        code: "VIDEO_NOT_FOUND",
+        status: 404,
+      });
+    }
+
+    if (video.creator_id === creator.id) {
+      return apiErrorResponse({
+        message: "Cannot rate your own video",
+        code: "VALIDATION_SELF_RATING",
+        status: 400,
+      });
+    }
+
     // 检查是否已评价
     const existingRating = await getCreatorRating(creator.id, id);
     if (existingRating) {
@@ -144,7 +161,7 @@ export async function POST(
       });
     }
 
-    const rating = await createRating(creator.id, id, {
+    const rating = await createRating(id, creator.id, {
       relevance,
       accuracy,
       novelty,
@@ -180,6 +197,14 @@ export async function POST(
       return apiErrorResponse({
         message: (error as Error).message,
         code: "VALIDATION_INVALID_RATING",
+        status: 400,
+      });
+    }
+
+    if ((error as Error).message === "Cannot rate your own video") {
+      return apiErrorResponse({
+        message: "Cannot rate your own video",
+        code: "VALIDATION_SELF_RATING",
         status: 400,
       });
     }

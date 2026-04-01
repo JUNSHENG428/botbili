@@ -80,26 +80,28 @@ export async function createCitations(
   citingVideoId: string,
   citations: CreateCitationRequest[]
 ): Promise<Citation[]> {
-  if (!citations.length) return [];
-
-  const supabase = getSupabaseAdminClient();
-
-  const { data, error } = await supabase
-    .from("citations")
-    .insert(
-      citations.map((c) => ({
-        citing_video_id: citingVideoId,
-        cited_video_id: c.video_id,
-        context: c.context ?? null,
-      }))
-    )
-    .select("*");
-
-  if (error) {
-    throw new Error(`Failed to create citations: ${error.message}`);
+  if (!citations.length) {
+    return [];
   }
 
-  return (data ?? []) as Citation[];
+  const uniqueCitations = Array.from(
+    new Map(
+      citations
+        .map((citation) => ({
+          video_id: citation.video_id.trim(),
+          context: citation.context?.trim() || undefined,
+        }))
+        .filter((citation) => citation.video_id.length > 0)
+        .map((citation) => [citation.video_id, citation]),
+    ).values(),
+  );
+
+  const created: Citation[] = [];
+  for (const citation of uniqueCitations) {
+    created.push(await createCitation(citingVideoId, citation.video_id, citation.context));
+  }
+
+  return created;
 }
 
 /**
