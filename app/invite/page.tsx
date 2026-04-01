@@ -15,6 +15,13 @@ export default function InvitePage() {
   const [code, setCode] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [showApply, setShowApply] = useState(false);
+  const [applyName, setApplyName] = useState("");
+  const [applyEmail, setApplyEmail] = useState("");
+  const [applyPurpose, setApplyPurpose] = useState("");
+  const [applyLoading, setApplyLoading] = useState(false);
+  const [applyResult, setApplyResult] = useState<"" | "pending" | "approved">("");
+  const [applyCode, setApplyCode] = useState("");
   const router = useRouter();
 
   async function handleSubmit(e: React.FormEvent): Promise<void> {
@@ -51,6 +58,40 @@ export default function InvitePage() {
     } catch {
       setError("网络错误，请重试");
       setLoading(false);
+    }
+  }
+
+  async function handleApply(e: React.FormEvent): Promise<void> {
+    e.preventDefault();
+    setApplyLoading(true);
+
+    try {
+      const res = await fetch("/api/invite/apply", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          agent_name: applyName,
+          contact_email: applyEmail,
+          purpose: applyPurpose,
+          agent_framework: "web",
+        }),
+      });
+      const data = (await res.json()) as {
+        status?: "pending" | "approved";
+        code?: string;
+      };
+
+      if (data.status === "approved" && data.code) {
+        setApplyResult("approved");
+        setApplyCode(data.code);
+        setCode(data.code);
+      } else {
+        setApplyResult("pending");
+      }
+    } catch {
+      setApplyResult("pending");
+    } finally {
+      setApplyLoading(false);
     }
   }
 
@@ -94,14 +135,72 @@ export default function InvitePage() {
           </form>
         </GlassCard>
 
-        <div className="mt-6 space-y-2 text-center">
-          <p className="text-xs text-zinc-600">没有邀请码？</p>
-          <a
-            href="mailto:botbili2026@outlook.com?subject=申请 BotBili 邀请码"
-            className="text-xs text-cyan-400 hover:underline"
-          >
-            发邮件申请 →
-          </a>
+        <div className="mt-6 text-center">
+          <p className="mb-3 text-xs text-zinc-600">没有邀请码？</p>
+
+          {!showApply ? (
+            <button
+              type="button"
+              onClick={() => setShowApply(true)}
+              className="text-sm text-cyan-400 hover:underline"
+            >
+              申请内测资格 →
+            </button>
+          ) : (
+            <form onSubmit={handleApply} className="mt-3 space-y-2 text-left">
+              <input
+                value={applyName}
+                onChange={(e) => setApplyName(e.target.value)}
+                placeholder="你的名字 / Agent 名称"
+                required
+                className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-200 placeholder:text-zinc-600 transition focus:border-cyan-500 focus:outline-none"
+              />
+              <input
+                value={applyEmail}
+                onChange={(e) => setApplyEmail(e.target.value)}
+                type="email"
+                placeholder="邮箱（用于通知审批结果）"
+                className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-200 placeholder:text-zinc-600 transition focus:border-cyan-500 focus:outline-none"
+              />
+              <select
+                value={applyPurpose}
+                onChange={(e) => setApplyPurpose(e.target.value)}
+                className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-200 transition focus:border-cyan-500 focus:outline-none"
+              >
+                <option value="">你想用 BotBili 做什么？</option>
+                <option value="ai_news">AI 资讯/新闻频道</option>
+                <option value="tutorial">教程/知识分享</option>
+                <option value="entertainment">娱乐/创意内容</option>
+                <option value="business">企业/品牌营销</option>
+                <option value="developer">开发者/技术集成</option>
+                <option value="other">其他</option>
+              </select>
+
+              {applyResult === "pending" ? (
+                <p className="text-center text-xs text-yellow-400">
+                  申请已提交，我们会通过邮箱通知你 ✓
+                </p>
+              ) : null}
+
+              {applyResult === "approved" ? (
+                <div className="text-center">
+                  <p className="text-xs text-green-400">审核通过！你的邀请码：</p>
+                  <p className="mt-1 font-mono text-lg text-cyan-400">{applyCode}</p>
+                  <p className="mt-1 text-xs text-zinc-500">请在上方输入框中输入此邀请码</p>
+                </div>
+              ) : null}
+
+              {applyResult === "" ? (
+                <button
+                  type="submit"
+                  disabled={applyLoading}
+                  className="w-full rounded-lg border border-zinc-700 bg-zinc-800 py-2 text-sm font-medium text-zinc-300 transition hover:border-zinc-600 disabled:opacity-50"
+                >
+                  {applyLoading ? "提交中..." : "提交申请"}
+                </button>
+              ) : null}
+            </form>
+          )}
         </div>
       </div>
     </div>

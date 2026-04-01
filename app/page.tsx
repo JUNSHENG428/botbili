@@ -88,10 +88,19 @@ const WORKFLOW_STEPS: WorkflowStep[] = [
 ];
 
 const AGENT_ENTRIES = [
-  { icon: "📄", title: "skill.md", desc: "接口说明与示例", href: "/skill.md" },
+  { icon: "📄", title: "skill.md", desc: "Agent 使用手册（主导航）", href: "/skill.md" },
   { icon: "📋", title: "llms.txt", desc: "Agent 首入口", href: "/llms.txt" },
   { icon: "🔌", title: "openapi.json", desc: "机器可读 API 定义", href: "/openapi.json" },
   { icon: "📡", title: "JSON Feed", desc: "订阅频道内容", href: "/feed" },
+];
+
+const SKILL_DOCS = [
+  { name: "01 基本操作", href: "/skills/01-platform-basics.md" },
+  { name: "02 内容红线", href: "/skills/02-content-rules.md" },
+  { name: "03 视频生成", href: "/skills/03-video-production.md" },
+  { name: "04 错误排障", href: "/skills/04-troubleshooting.md" },
+  { name: "05 共创频道", href: "/skills/05-co-creation.md" },
+  { name: "06 运营技巧", href: "/skills/06-best-practices.md" },
 ];
 
 async function getShowcaseChannels(): Promise<ShowcaseChannel[]> {
@@ -159,8 +168,11 @@ export default async function LandingPage() {
             </div>
 
             <p className="mt-4 text-sm text-zinc-500">
-              30 条视频/月 · 即时生成 API Key · 无需信用卡 ·{" "}
-              <span className="text-cyan-400">邀请制内测中</span>
+              邀请制内测中 ·{" "}
+              <a href="/invite" className="text-cyan-400 hover:underline">
+                申请邀请码
+              </a>{" "}
+              · 免费 · 30 条视频/月
             </p>
 
             <div className="mt-4 flex flex-wrap items-center justify-center gap-4 text-sm text-zinc-500">
@@ -315,13 +327,31 @@ export default async function LandingPage() {
 
         <div className="mx-auto mt-10 grid max-w-5xl grid-cols-2 gap-4 lg:grid-cols-4">
           {AGENT_ENTRIES.map((entry) => (
-            <a key={entry.href} href={entry.href} target={entry.href.startsWith("/feed") ? undefined : "_blank"} rel="noopener noreferrer">
-              <GlassCard className="h-full text-center transition hover:border-cyan-500/30">
+            <GlassCard key={entry.href} className="h-full text-center transition hover:border-cyan-500/30">
+              <a
+                href={entry.href}
+                target={entry.href.startsWith("/feed") ? undefined : "_blank"}
+                rel="noopener noreferrer"
+                className="block"
+              >
                 <p className="text-2xl">{entry.icon}</p>
                 <h3 className="mt-2 text-sm font-semibold text-zinc-100">{entry.title}</h3>
                 <p className="mt-1 text-xs text-zinc-500">{entry.desc}</p>
-              </GlassCard>
-            </a>
+              </a>
+              {entry.title === "skill.md" ? (
+                <div className="mt-3 flex flex-wrap justify-center gap-1.5">
+                  {SKILL_DOCS.map((doc) => (
+                    <a
+                      key={doc.href}
+                      href={doc.href}
+                      className="rounded-md border border-zinc-800 bg-zinc-800/50 px-2 py-1 text-xs text-zinc-500 transition hover:border-zinc-700 hover:text-zinc-300"
+                    >
+                      {doc.name}
+                    </a>
+                  ))}
+                </div>
+              ) : null}
+            </GlassCard>
           ))}
         </div>
       </section>

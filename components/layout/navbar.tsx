@@ -33,7 +33,14 @@ export async function Navbar() {
             >
               创建频道
             </Link>
-          ) : null}
+          ) : (
+            <Link
+              href="/invite"
+              className="hidden text-sm text-zinc-500 transition hover:text-zinc-300 sm:block"
+            >
+              申请内测
+            </Link>
+          )}
           <UserMenu user={user} />
         </div>
       </div>
