@@ -40,6 +40,11 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
 
   const pathname = request.nextUrl.pathname;
 
+  // Agent API 请求不走邀请码页面拦截，交给各 API Route 自行处理。
+  if (pathname.startsWith("/api/")) {
+    return response;
+  }
+
   if (user && pathname === "/login") {
     return NextResponse.redirect(new URL("/feed", request.url));
   }

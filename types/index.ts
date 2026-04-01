@@ -6,6 +6,7 @@ export interface ApiError {
   limit?: number;
   reset_at?: string;
   retry_after?: number;
+  daily_limit?: number;
   docs_url?: string;
 }
 
@@ -44,6 +45,7 @@ export interface Creator {
   uploads_this_month: number;
   quota_reset_at: string;
   followers_count: number;
+  source?: "agent" | "human";
   is_active: boolean;
   created_at: string;
   updated_at: string;
