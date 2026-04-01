@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { withRateLimitHeaders } from "@/lib/api-response";
 import { extractBearerToken, hashApiKey, verifyApiKey } from "@/lib/auth";
+import { createCitations } from "@/lib/citations";
 import { uploadVideoByUrl } from "@/lib/cloudflare";
 import { moderateText } from "@/lib/moderation";
 import { checkAndIncrementQuota, consumeHourlyUploadLimit, HOURLY_LIMIT } from "@/lib/quota";
@@ -116,6 +117,24 @@ function validateUploadBody(rawBody: unknown): ValidationResult {
     }
   }
 
+  // 验证 cites（V2.0 引用链功能）
+  let cites: Array<{ video_id: string; context?: string }> | undefined;
+  if (body.cites !== undefined) {
+    if (!Array.isArray(body.cites) || body.cites.length > 10) {
+      return { ok: false, error: "Invalid cites (max 10)", code: "INVALID_CITES", status: 400 };
+    }
+    const hasInvalidCite = body.cites.some(
+      (cite: unknown) =>
+        typeof cite !== "object" ||
+        cite === null ||
+        typeof (cite as { video_id?: string }).video_id !== "string"
+    );
+    if (hasInvalidCite) {
+      return { ok: false, error: "Invalid cites format", code: "INVALID_CITES", status: 400 };
+    }
+    cites = body.cites as Array<{ video_id: string; context?: string }>;
+  }
+
   return {
     ok: true,
     data: {
@@ -128,6 +147,7 @@ function validateUploadBody(rawBody: unknown): ValidationResult {
       transcript: body.transcript?.trim(),
       summary: body.summary?.trim(),
       language: body.language?.trim() || "zh-CN",
+      cites,
     },
   };
 }
@@ -227,6 +247,22 @@ export async function POST(request: NextRequest): Promise<NextResponse<ApiError 
       cloudflareResult.uid,
       cloudflareResult.playbackUrl,
     );
+
+    // 处理引用链（V2.0）
+    if (uploadPayload.cites && uploadPayload.cites.length > 0) {
+      try {
+        await createCitations(
+          createdVideo.id,
+          uploadPayload.cites.map((c) => ({
+            video_id: c.video_id,
+            context: c.context,
+          }))
+        );
+      } catch (citeError) {
+        console.error("Failed to create citations:", citeError);
+        // 引用失败不影响视频创建，只记录日志
+      }
+    }
 
     const { getBaseUrl } = await import("@/lib/utils");
     const appUrl = getBaseUrl();

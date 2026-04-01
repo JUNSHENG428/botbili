@@ -23,6 +23,10 @@ export interface UploadRequest {
   transcript?: string;
   summary?: string;
   language?: string;
+  cites?: Array<{
+    video_id: string;
+    context?: string;
+  }>;
 }
 
 export interface UploadResponse {
