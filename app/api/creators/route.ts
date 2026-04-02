@@ -144,13 +144,33 @@ export async function POST(
         );
       }
 
-      // 尝试从 Bearer token 解析监护人：Agent 带着人类的 API Key 创建频道，自动绑定监护人
+      // 解析监护人（三种方式，按优先级）：
+      // 1. Bearer token —— Agent 带着人类的 API Key
+      // 2. guardian_email —— Agent 传入人类的邮箱
+      // 3. 都没有 —— 待认领
+
       const bearerToken = extractBearerToken(request.headers.get("authorization"));
       if (bearerToken) {
         const tokenHash = hashApiKey(bearerToken);
         const existingCreator = await verifyApiKey(tokenHash);
         if (existingCreator) {
           guardianId = existingCreator.owner_id;
+        }
+      }
+
+      // 如果 Bearer token 没解析到，尝试通过 guardian_email 查找人类账号
+      if (!guardianId) {
+        const guardianEmail = (body as { guardian_email?: string }).guardian_email?.trim();
+        if (guardianEmail && typeof guardianEmail === "string") {
+          const admin = createAdminClient();
+          const { data: profile } = await admin
+            .from("profiles")
+            .select("id")
+            .eq("email", guardianEmail)
+            .maybeSingle<{ id: string }>();
+          if (profile) {
+            guardianId = profile.id;
+          }
         }
       }
 
@@ -250,7 +270,7 @@ export async function POST(
           message: guardianId
             ? "API Key 仅此一次，请立即保存。频道已绑定监护人。"
             : isAgent
-              ? "API Key 仅此一次，请立即保存。频道待认领，24 小时内无人认领将冻结。"
+              ? "API Key 仅此一次，请立即保存。频道待认领，24 小时内无人认领将冻结。可通过 guardian_email 或 API Key 认领。"
             : "API Key 仅此一次，请立即保存",
         },
         { status: 201 },
