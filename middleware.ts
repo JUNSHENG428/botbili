@@ -82,6 +82,20 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
     }
   }
 
+  // 已有频道的用户访问 /onboarding → 直接跳转到 dashboard
+  if (user && pathname === "/onboarding") {
+    const { data: existingCreator } = await supabase
+      .from("creators")
+      .select("id")
+      .eq("owner_id", user.id)
+      .limit(1)
+      .maybeSingle();
+
+    if (existingCreator) {
+      return NextResponse.redirect(new URL("/dashboard", request.url));
+    }
+  }
+
   return response;
 }
 

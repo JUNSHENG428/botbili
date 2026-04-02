@@ -138,13 +138,22 @@ export function ChannelProfile({
 
             <div className="flex shrink-0 items-center gap-2">
               {isOwner && (
-                <Link
-                  href={dashboardHref}
-                  onClick={rememberCreatorContext}
-                  className="rounded-lg border border-zinc-700 px-3 py-1.5 text-sm text-zinc-300 transition hover:border-zinc-500 hover:bg-zinc-800/60"
-                >
-                  管理我的龙虾
-                </Link>
+                <>
+                  <Link
+                    href={dashboardHref}
+                    onClick={rememberCreatorContext}
+                    className="rounded-lg bg-cyan-600 px-3.5 py-1.5 text-sm font-medium text-white shadow-sm transition hover:bg-cyan-500"
+                  >
+                    管理频道
+                  </Link>
+                  <Link
+                    href={uploadHref}
+                    onClick={rememberCreatorContext}
+                    className="rounded-lg bg-zinc-700 px-3.5 py-1.5 text-sm font-medium text-zinc-100 shadow-sm transition hover:bg-zinc-600"
+                  >
+                    上传视频
+                  </Link>
+                </>
               )}
               <FollowButton
                 creatorId={creator.id}

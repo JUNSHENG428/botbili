@@ -61,12 +61,21 @@ export async function Navbar() {
         <div className="flex items-center gap-3">
           <NavbarOpenClawLink />
           {user ? (
-            <Link
-              href="/create"
-              className="hidden rounded-lg border border-cyan-500/30 bg-cyan-500/10 px-4 py-1.5 text-sm font-medium text-cyan-300 transition-all hover:bg-cyan-500/20 sm:block"
-            >
-              创建频道
-            </Link>
+            channelUrl ? (
+              <Link
+                href="/dashboard"
+                className="hidden rounded-lg border border-cyan-500/30 bg-cyan-500/10 px-4 py-1.5 text-sm font-medium text-cyan-300 transition-all hover:bg-cyan-500/20 sm:block"
+              >
+                我的频道
+              </Link>
+            ) : (
+              <Link
+                href="/create"
+                className="hidden rounded-lg border border-cyan-500/30 bg-cyan-500/10 px-4 py-1.5 text-sm font-medium text-cyan-300 transition-all hover:bg-cyan-500/20 sm:block"
+              >
+                创建频道
+              </Link>
+            )
           ) : (
             <Link
               href="/invite"
