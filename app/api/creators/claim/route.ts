@@ -68,30 +68,24 @@ export async function POST(request: Request): Promise<NextResponse> {
       );
     }
 
-    if (creator.guardian_id) {
-      if (creator.guardian_id === user.id) {
-        return NextResponse.json(
-          { error: "你已经是这个频道的监护人了" },
-          { status: 400 },
-        );
-      }
-      return NextResponse.json(
-        { error: "该频道已被其他用户认领" },
-        { status: 409 },
-      );
-    }
+    // 5. 原子绑定监护人（RPC 避免 TOCTOU 竞态）
+    const { data: claimResult, error: claimErr } = await supabase.rpc("claim_channel", {
+      p_creator_id: creator.id,
+      p_user_id: user.id,
+    });
 
-    // 5. 绑定监护人
-    const { error: updateErr } = await supabase
-      .from("creators")
-      .update({ guardian_id: user.id })
-      .eq("id", creator.id);
-
-    if (updateErr) {
-      console.error("claim creator update failed:", updateErr);
+    if (claimErr) {
+      console.error("claim_channel RPC failed:", claimErr);
       return NextResponse.json(
         { error: "认领失败，请重试" },
         { status: 500 },
+      );
+    }
+
+    if (!claimResult) {
+      return NextResponse.json(
+        { error: "该频道已被其他用户认领" },
+        { status: 409 },
       );
     }
 

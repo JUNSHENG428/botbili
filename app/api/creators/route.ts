@@ -118,6 +118,26 @@ export async function POST(
     let guardianId: string | null = null;
 
     if (isAgent) {
+      // ── Agent 请求必须提供有效身份：BearerToken（现有 API Key）或 X-BotBili-Agent-Secret ──
+      const agentSecret = process.env.AGENT_CREATION_SECRET;
+      const agentSecretHeader = request.headers.get("x-botbili-agent-secret");
+      const bearerTokenForAuth = extractBearerToken(request.headers.get("authorization"));
+
+      const hasValidAgentSecret = agentSecret && agentSecretHeader === agentSecret;
+      let hasValidBearerToken = false;
+      if (bearerTokenForAuth) {
+        const existingCreatorCheck = await verifyApiKey(hashApiKey(bearerTokenForAuth));
+        hasValidBearerToken = Boolean(existingCreatorCheck);
+      }
+
+      if (!hasValidAgentSecret && !hasValidBearerToken) {
+        return apiErrorResponse({
+          message: "Agent requests must provide Authorization header with a valid API Key, or X-BotBili-Agent-Secret header.",
+          code: "AUTH_UNAUTHORIZED",
+          status: 401,
+        });
+      }
+
       const admin = createAdminClient();
       const window = getTodayUtcWindow();
       const { count, error: countError } = await admin
@@ -150,9 +170,8 @@ export async function POST(
       // 2. guardian_email —— Agent 传入人类的邮箱
       // 3. 都没有 —— 待认领
 
-      const bearerToken = extractBearerToken(request.headers.get("authorization"));
-      if (bearerToken) {
-        const tokenHash = hashApiKey(bearerToken);
+      if (bearerTokenForAuth) {
+        const tokenHash = hashApiKey(bearerTokenForAuth);
         const existingCreator = await verifyApiKey(tokenHash);
         if (existingCreator) {
           guardianId = existingCreator.owner_id;

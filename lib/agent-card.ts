@@ -90,7 +90,7 @@ export function slugifyCreatorName(name: string, fallbackId?: string): string {
     return normalized;
   }
 
-  return fallbackId ?? "creator";
+  return fallbackId ?? "";
 }
 
 export function getCreatorSlug(creator: Pick<CreatorLookupRow, "id" | "name">): string {

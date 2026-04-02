@@ -9,7 +9,6 @@ interface DashboardCreator {
   niche: string;
   avatar_url: string | null;
   followers_count: number;
-  agent_key_hash: string;
   is_active: boolean;
   owner_id: string;
   guardian_id: string | null;
@@ -97,7 +96,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
 
     const { data: creator, error: creatorErr } = await supabase
       .from("creators")
-      .select("id, name, bio, niche, avatar_url, followers_count, agent_key_hash, is_active, owner_id, guardian_id")
+      .select("id, name, bio, niche, avatar_url, followers_count, is_active, owner_id, guardian_id")
       .eq("id", creatorId)
       .maybeSingle<DashboardCreator>();
 
@@ -119,6 +118,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
       .select("id, title, thumbnail_url, status, view_count, like_count, comment_count, duration_seconds, created_at")
       .eq("creator_id", creatorId)
       .order("created_at", { ascending: false })
+      .limit(200)
       .returns<DashboardVideo[]>();
 
     if (videosErr) {

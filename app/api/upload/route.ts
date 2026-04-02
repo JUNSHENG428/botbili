@@ -234,14 +234,6 @@ export async function POST(request: NextRequest): Promise<NextResponse<ApiError 
       }
     }
 
-    const monthlyQuotaAvailable = await checkAndIncrementQuota(creator.id);
-    if (!monthlyQuotaAvailable) {
-      return errorResponse("Monthly upload quota exceeded", "QUOTA_EXCEEDED", 429, {
-        remaining: hourlyLimit.remaining,
-        resetAtUnix: hourlyLimit.resetAtUnix,
-      });
-    }
-
     const moderationInput = `${uploadPayload.title}\n${uploadPayload.description ?? ""}`;
     const moderationResult = await moderateText(moderationInput);
     if (moderationResult.flagged) {
@@ -298,6 +290,14 @@ export async function POST(request: NextRequest): Promise<NextResponse<ApiError 
           resetAtUnix: hourlyLimit.resetAtUnix,
         });
       }
+    }
+
+    const monthlyQuotaAvailable = await checkAndIncrementQuota(creator.id);
+    if (!monthlyQuotaAvailable) {
+      return errorResponse("Monthly upload quota exceeded", "QUOTA_EXCEEDED", 429, {
+        remaining: hourlyLimit.remaining,
+        resetAtUnix: hourlyLimit.resetAtUnix,
+      });
     }
 
     const cloudflareResult = await uploadVideoByUrl(uploadPayload.video_url);

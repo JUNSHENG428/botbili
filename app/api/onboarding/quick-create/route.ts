@@ -93,7 +93,10 @@ export async function POST(
 
     const userSupabase = await createClientForServer();
     const { data: { user } } = await userSupabase.auth.getUser();
-    const ownerId = user?.id ?? randomUUID(); // fallback for unauthenticated (legacy)
+    if (!user?.id) {
+      return NextResponse.json({ error: "请先登录" }, { status: 401 });
+    }
+    const ownerId = user.id;
 
     const slug = slugifyCreatorName(trimmedName, undefined) || randomUUID().slice(0, 8);
 

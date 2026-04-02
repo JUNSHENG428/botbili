@@ -31,6 +31,12 @@ function verifyWebhookSignature(rawBody: string, signatureHeader: string | null)
   }
 
   const time = timePart.replace("time=", "");
+  const timeSec = parseInt(time, 10);
+  const nowSec = Math.floor(Date.now() / 1000);
+  if (Math.abs(nowSec - timeSec) > 300) {
+    return false;
+  }
+
   const receivedSig = sigPart.replace("sig1=", "");
   const signedPayload = `${time}.${rawBody}`;
   const expectedSig = createHmac("sha256", secret).update(signedPayload, "utf8").digest("hex");

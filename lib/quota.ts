@@ -2,7 +2,6 @@ import { getSupabaseAdminClient } from "@/lib/supabase/server";
 import { checkAndIncrementQuota as checkAndIncrementMonthlyQuota } from "@/lib/upload-repository";
 
 export const HOURLY_LIMIT = 10;
-const HOUR_MS = 60 * 60 * 1000;
 
 export interface HourlyQuotaResult {
   allowed: boolean;
@@ -10,76 +9,34 @@ export interface HourlyQuotaResult {
   resetAtUnix: number;
 }
 
-interface HourlyLimitRow {
-  key_hash: string;
-  count: number;
-  reset_at: string;
-}
-
-async function cleanupExpiredLimits(): Promise<void> {
-  const supabase = getSupabaseAdminClient();
-  await supabase
-    .from("hourly_upload_limits")
-    .delete()
-    .lt("reset_at", new Date().toISOString());
-}
-
+/**
+ * 消耗小时上传限额，使用原子 RPC 避免并发竞态。
+ */
 export async function consumeHourlyUploadLimit(keyHash: string): Promise<HourlyQuotaResult> {
   const supabase = getSupabaseAdminClient();
-  const now = Date.now();
 
-  await cleanupExpiredLimits();
-
-  const { data, error } = await supabase
-    .from("hourly_upload_limits")
-    .select("key_hash, count, reset_at")
-    .eq("key_hash", keyHash)
-    .maybeSingle<HourlyLimitRow>();
+  const { data, error } = await supabase.rpc("consume_hourly_limit", {
+    p_key_hash: keyHash,
+    p_limit: HOURLY_LIMIT,
+  });
 
   if (error) {
-    throw new Error(`consumeHourlyUploadLimit query failed: ${error.message}`);
+    throw new Error(`consumeHourlyUploadLimit RPC failed: ${error.message}`);
   }
 
-  const resetAt = Math.floor((now + HOUR_MS) / 1000);
-
-  if (!data || new Date(data.reset_at) <= new Date(now)) {
-    const { error: insertError } = await supabase
-      .from("hourly_upload_limits")
-      .upsert({
-        key_hash: keyHash,
-        count: 1,
-        reset_at: new Date(now + HOUR_MS).toISOString(),
-      });
-
-    if (insertError) {
-      throw new Error(`consumeHourlyUploadLimit upsert failed: ${insertError.message}`);
-    }
-
-    return { allowed: true, remaining: HOURLY_LIMIT - 1, resetAtUnix: resetAt };
+  const result = data as { allowed: boolean; current_count: number; reset_at_unix: number } | null;
+  if (!result) {
+    throw new Error("consumeHourlyUploadLimit RPC returned no data");
   }
 
-  if (data.count >= HOURLY_LIMIT) {
-    return {
-      allowed: false,
-      remaining: 0,
-      resetAtUnix: Math.floor(new Date(data.reset_at).getTime() / 1000),
-    };
-  }
+  const remaining = result.allowed
+    ? Math.max(0, HOURLY_LIMIT - result.current_count)
+    : 0;
 
-  const { error: updateError } = await supabase
-    .from("hourly_upload_limits")
-    .update({ count: data.count + 1 })
-    .eq("key_hash", keyHash);
-
-  if (updateError) {
-    throw new Error(`consumeHourlyUploadLimit update failed: ${updateError.message}`);
-  }
-
-  const nextCount = data.count + 1;
   return {
-    allowed: true,
-    remaining: Math.max(0, HOURLY_LIMIT - nextCount),
-    resetAtUnix: Math.floor(new Date(data.reset_at).getTime() / 1000),
+    allowed: result.allowed,
+    remaining,
+    resetAtUnix: result.reset_at_unix,
   };
 }
 

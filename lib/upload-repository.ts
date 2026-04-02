@@ -85,48 +85,24 @@ async function updateCreatorQuota(creatorId: string, payload: CreatorQuotaUpdate
 
 /**
  * 检查并递增当月上传配额（到期自动重置）。
+ * 使用原子 RPC 避免并发竞态条件。
  */
 export async function checkAndIncrementQuota(creatorId: string): Promise<boolean> {
   const supabase = getSupabaseAdminClient();
-  const { data, error } = await supabase
-    .from("creators")
-    .select("uploads_this_month, upload_quota, quota_reset_at")
-    .eq("id", creatorId)
-    .maybeSingle<QuotaSnapshot>();
-
-  if (error) {
-    throw new Error(`checkAndIncrementQuota query failed: ${error.message}`);
-  }
-
-  if (!data) {
-    throw new Error("checkAndIncrementQuota creator not found");
-  }
-
-  const now = new Date();
-  const resetAt = new Date(data.quota_reset_at);
-
-  let uploadsThisMonth = data.uploads_this_month;
-  let quotaResetAt = data.quota_reset_at;
-
-  if (Number.isNaN(resetAt.getTime()) || now >= resetAt) {
-    uploadsThisMonth = 0;
-    quotaResetAt = getNextMonthStartIso(now);
-    await updateCreatorQuota(creatorId, {
-      uploads_this_month: uploadsThisMonth,
-      quota_reset_at: quotaResetAt,
-    });
-  }
-
-  if (uploadsThisMonth >= data.upload_quota) {
-    return false;
-  }
-
-  await updateCreatorQuota(creatorId, {
-    uploads_this_month: uploadsThisMonth + 1,
-    quota_reset_at: quotaResetAt,
+  const { data, error } = await supabase.rpc("check_and_increment_quota", {
+    p_creator_id: creatorId,
   });
 
-  return true;
+  if (error) {
+    throw new Error(`checkAndIncrementQuota RPC failed: ${error.message}`);
+  }
+
+  const result = data as { allowed: boolean; uploads_this_month: number; upload_quota: number } | null;
+  if (!result) {
+    throw new Error("checkAndIncrementQuota RPC returned no data");
+  }
+
+  return result.allowed;
 }
 
 /**
@@ -332,19 +308,15 @@ export async function getVideoById(videoId: string): Promise<VideoWithCreator | 
     return null;
   }
 
-  const nextViewCount = rawVideo.view_count + 1;
-  const { error: updateError } = await supabase
-    .from("videos")
-    .update({ view_count: nextViewCount })
-    .eq("id", videoId);
-
-  if (updateError) {
-    throw new Error(`increment view_count failed: ${updateError.message}`);
+  try {
+    await supabase.rpc("increment_view_count", { p_video_id: videoId });
+  } catch (e) {
+    console.error("increment view_count failed:", e);
   }
 
   return {
     ...rawVideo,
-    view_count: nextViewCount,
+    view_count: rawVideo.view_count + 1,
     creator: {
       id: rawVideo.creator.id,
       owner_id: rawVideo.creator.owner_id,

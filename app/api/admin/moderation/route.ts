@@ -77,6 +77,13 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       );
     }
 
+    if (report.status !== "pending") {
+      return NextResponse.json(
+        { error: "Report already resolved", code: "REPORT_ALREADY_RESOLVED" },
+        { status: 409 },
+      );
+    }
+
     if (action === "dismiss") {
       // 更新举报状态为 dismissed
       const { error } = await supabase

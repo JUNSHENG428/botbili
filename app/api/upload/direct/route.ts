@@ -3,7 +3,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { withRateLimitHeaders } from "@/lib/api-response";
 import { extractBearerToken, hashApiKey, verifyApiKey } from "@/lib/auth";
 import { createDirectUpload } from "@/lib/cloudflare";
-import { consumeHourlyUploadLimit, HOURLY_LIMIT } from "@/lib/quota";
+import { moderateText } from "@/lib/moderation";
+import { checkAndIncrementQuota, consumeHourlyUploadLimit, HOURLY_LIMIT } from "@/lib/quota";
 import { createVideo } from "@/lib/upload-repository";
 import { buildApiErrorWithMeta } from "@/lib/utils";
 import type { ApiError } from "@/types";
@@ -79,6 +80,11 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       return errorResponse("Invalid API key", "AUTH_INVALID_KEY", 401);
     }
 
+    // ── 检查 is_active ──
+    if (!creator.is_active) {
+      return errorResponse("API key is inactive", "AUTH_ACCOUNT_DISABLED", 403);
+    }
+
     // ── 解析 body ──
     let body: DirectUploadBody;
     try {
@@ -103,6 +109,23 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         "RATE_LIMITED",
         429,
       );
+    }
+
+    // ── 内容审核 ──
+    const moderationInput = `${body.title.trim()}\n${body.description ?? ""}`;
+    const moderationResult = await moderateText(moderationInput);
+    if (moderationResult.flagged) {
+      const reason =
+        moderationResult.categories.length > 0
+          ? `Content rejected: ${moderationResult.categories.join(", ")}`
+          : "Content rejected by moderation";
+      return errorResponse(reason, "MODERATION_REJECTED", 422);
+    }
+
+    // ── 每月配额检查 ──
+    const monthlyQuotaAvailable = await checkAndIncrementQuota(creator.id);
+    if (!monthlyQuotaAvailable) {
+      return errorResponse("Monthly upload quota exceeded", "QUOTA_EXCEEDED", 429);
     }
 
     // ── 创建 Cloudflare Direct Upload ──
