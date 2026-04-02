@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { apiErrorResponse } from "@/lib/api-response";
 import { createClientForServer } from "@/lib/supabase/server";
 
-const ADMIN_EMAIL = process.env.ADMIN_EMAIL ?? "majunsheng0428@gmail.com";
+import { isAdmin } from "@/lib/admin";
 
 export async function GET(): Promise<NextResponse> {
   const supabase = await createClientForServer();
@@ -11,7 +11,7 @@ export async function GET(): Promise<NextResponse> {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user || user.email !== ADMIN_EMAIL) {
+  if (!user || !isAdmin(user.email ?? undefined)) {
     return apiErrorResponse({
       message: "Forbidden",
       code: "AUTH_FORBIDDEN",

@@ -19,6 +19,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
       .from("creators")
       .select("id")
       .ilike("name", name)
+      .eq("is_active", true)
       .limit(1);
 
     if (error) {

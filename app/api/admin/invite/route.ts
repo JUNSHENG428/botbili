@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 import { createAdminClient, createClientForServer } from "@/lib/supabase/server";
 
-const ADMIN_EMAIL = "majunsheng0428@gmail.com";
+import { getAdminEmail, isAdmin } from "@/lib/admin";
 
 export async function GET(): Promise<NextResponse> {
   try {
@@ -11,7 +11,7 @@ export async function GET(): Promise<NextResponse> {
       data: { user },
     } = await serverClient.auth.getUser();
 
-    if (user?.email !== ADMIN_EMAIL) {
+    if (!isAdmin(user?.email)) {
       return NextResponse.json({ error: "无权限" }, { status: 403 });
     }
 

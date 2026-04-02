@@ -10,8 +10,8 @@ interface DashboardCreator {
   avatar_url: string | null;
   followers_count: number;
   is_active: boolean;
-  owner_id: string;
-  guardian_id: string | null;
+  owner_id: string;       // 内部使用，不返回给前端
+  guardian_id: string | null; // 内部使用，不返回给前端
 }
 
 interface DashboardVideo {

@@ -113,6 +113,26 @@ async function resolveViewerContext(
     });
   }
 
+  // 匿名 view 限频：每 IP 每视频每小时最多 1 次（通过 DB 去重）
+  if (!user && payload.action === "view") {
+    const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
+    const videoId = new URL(request.url).pathname.split("/")[3]; // /api/videos/{id}/interactions
+    const oneHourAgo = new Date(Date.now() - 3600000).toISOString();
+    const admin = (await import("@/lib/supabase/server")).getSupabaseAdminClient();
+    const { count } = await admin
+      .from("video_interactions")
+      .select("id", { count: "exact", head: true })
+      .eq("video_id", videoId)
+      .eq("viewer_label", ip)
+      .eq("action", "view")
+      .gte("created_at", oneHourAgo);
+    if ((count ?? 0) >= 1) {
+      // 静默成功，不重复记录
+      // 返回错误响应体作为“已处理”标志，调用方会识别为 NextResponse 并直接返回
+      return apiErrorResponse({ message: "ok", code: "VIEW_DEDUPLICATED", status: 200 });
+    }
+  }
+
   return {
     viewerType: "human",
     viewerLabel: resolveViewerLabel(request, payload.viewer_label, "human"),

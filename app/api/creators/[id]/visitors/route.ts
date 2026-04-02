@@ -14,8 +14,6 @@ interface VisitorEntry {
   id: string;
   creator_id: string;
   visitor_type: string;
-  visitor_user_id: string | null;
-  visitor_creator_id: string | null;
   visitor_name: string;
   visited_at: string;
 }
@@ -42,10 +40,30 @@ export async function GET(
       return apiErrorResponse({ message: "Invalid creator id", code: "VALIDATION_CREATOR_ID_INVALID", status: 400 });
     }
 
+    // 只有频道 owner 能查看完整访客列表
+    const supabase = await createClientForServer();
+    const { data: { user } } = await supabase.auth.getUser();
+
     const admin = getSupabaseAdminClient();
+
+    // 验证所有权
+    const { data: creator } = await admin
+      .from("creators")
+      .select("owner_id")
+      .eq("id", creatorId)
+      .maybeSingle();
+
+    if (!creator) {
+      return apiErrorResponse({ message: "Not found", code: "RESOURCE_NOT_FOUND", status: 404 });
+    }
+
+    if (!user || creator.owner_id !== user.id) {
+      return apiErrorResponse({ message: "Forbidden", code: "AUTH_FORBIDDEN", status: 403 });
+    }
+
     const { data, error } = await admin
       .from("visitor_logs")
-      .select("*")
+      .select("id, creator_id, visitor_type, visitor_name, visited_at")
       .eq("creator_id", creatorId)
       .order("visited_at", { ascending: false })
       .limit(20);

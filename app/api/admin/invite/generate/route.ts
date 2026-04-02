@@ -4,7 +4,7 @@ import { NextResponse } from "next/server";
 
 import { createAdminClient, createClientForServer } from "@/lib/supabase/server";
 
-const ADMIN_EMAIL = "majunsheng0428@gmail.com";
+import { getAdminEmail, isAdmin } from "@/lib/admin";
 
 interface GenerateBody {
   count?: number;
@@ -20,7 +20,7 @@ export async function POST(request: Request): Promise<NextResponse> {
       data: { user },
     } = await serverClient.auth.getUser();
 
-    if (user?.email !== ADMIN_EMAIL) {
+    if (!isAdmin(user?.email)) {
       return NextResponse.json({ error: "无权限" }, { status: 403 });
     }
 
@@ -39,7 +39,7 @@ export async function POST(request: Request): Promise<NextResponse> {
       code,
       source,
       max_uses: maxUses,
-      created_by: ADMIN_EMAIL,
+      created_by: getAdminEmail(),
     }));
 
     const admin = createAdminClient();
