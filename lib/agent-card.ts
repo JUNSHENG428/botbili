@@ -107,6 +107,8 @@ function toResolvedCreator(creator: CreatorLookupRow): ResolvedCreator {
 /**
  * 按 creator id 或 slug 解析频道。
  */
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export async function resolveCreatorByIdOrSlug(identifier: string): Promise<ResolvedCreator | null> {
   const trimmed = identifier.trim();
   if (!trimmed) {
@@ -114,21 +116,25 @@ export async function resolveCreatorByIdOrSlug(identifier: string): Promise<Reso
   }
 
   const supabase = getSupabaseAdminClient();
-  const { data: exactMatch, error: exactError } = await supabase
-    .from("creators")
-    .select("*")
-    .eq("id", trimmed)
-    .eq("is_active", true)
-    .maybeSingle<CreatorLookupRow>();
 
-  if (exactError) {
-    throw new Error(`resolveCreatorByIdOrSlug failed: ${exactError.message}`);
+  // Only query by UUID id if the identifier looks like a valid UUID
+  if (UUID_RE.test(trimmed)) {
+    const { data: exactMatch, error: exactError } = await supabase
+      .from("creators")
+      .select("*")
+      .eq("id", trimmed)
+      .eq("is_active", true)
+      .maybeSingle<CreatorLookupRow>();
+
+    if (exactError) {
+      // Swallow the error and fall through to slug lookup
+      console.error("resolveCreatorByIdOrSlug UUID lookup failed:", exactError.message);
+    } else if (exactMatch) {
+      return toResolvedCreator(exactMatch);
+    }
   }
 
-  if (exactMatch) {
-    return toResolvedCreator(exactMatch);
-  }
-
+  // Slug-based lookup: fetch all active creators and match by slug
   const { data: creators, error } = await supabase
     .from("creators")
     .select("*")

@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 
 import { generateApiKey } from "@/lib/auth";
+import { getCreatorSlug } from "@/lib/agent-card";
 import { createCreator } from "@/lib/upload-repository";
 import { getSupabaseAdminClient } from "@/lib/supabase/server";
 
@@ -190,7 +191,7 @@ export async function POST(
         creator_id: creator.id,
         creator_name: trimmedName,
         first_video: firstVideo,
-        channel_url: `/c/${creator.id}`,
+        channel_url: `/c/${getCreatorSlug({ id: creator.id, name: trimmedName })}`,
       },
       { status: 201 },
     );
