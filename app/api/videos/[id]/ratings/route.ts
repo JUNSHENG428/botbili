@@ -103,6 +103,15 @@ export async function POST(
       });
     }
 
+    // R2-05: Deactivated creators must not be able to submit ratings
+    if (!creator.is_active) {
+      return apiErrorResponse({
+        message: "Creator account is deactivated",
+        code: "AUTH_ACCOUNT_DISABLED",
+        status: 403,
+      });
+    }
+
     const video = await getVideoAccessRecord(id);
     if (!video || video.status !== "published") {
       return apiErrorResponse({
@@ -147,6 +156,15 @@ export async function POST(
       return apiErrorResponse({
         message: "relevance, accuracy, and novelty are required",
         code: "VALIDATION_MISSING_FIELD",
+        status: 400,
+      });
+    }
+
+    // R2-08: Limit rating comment to 500 characters to prevent storage-based DoS
+    if (comment && comment.length > 500) {
+      return apiErrorResponse({
+        message: "Rating comment too long (max 500 characters)",
+        code: "VALIDATION_COMMENT_TOO_LONG",
         status: 400,
       });
     }

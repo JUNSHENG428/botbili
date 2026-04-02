@@ -5,6 +5,7 @@ import { extractBearerToken } from "@/lib/auth";
 import { hashApiKey } from "@/lib/auth";
 import { verifyApiKey } from "@/lib/upload-repository";
 import { createWebhook, getWebhooksByCreatorId } from "@/lib/webhooks/repository";
+import { getWebhookUrlValidationError } from "@/lib/webhook-validation";
 import type { ApiError } from "@/types";
 
 export async function POST(request: Request): Promise<NextResponse> {
@@ -46,11 +47,10 @@ export async function POST(request: Request): Promise<NextResponse> {
       });
     }
 
-    try {
-      new URL(target_url);
-    } catch {
+    const urlError = getWebhookUrlValidationError(target_url);
+    if (urlError) {
       return apiErrorResponse({
-        message: "Invalid target_url format",
+        message: urlError,
         code: "VALIDATION_INVALID_URL",
         status: 400,
       });

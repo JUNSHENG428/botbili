@@ -3,6 +3,18 @@ import type { Creator } from "@/types";
 
 type CreatorLookupRow = Creator;
 
+/**
+ * R2-02: 公开安全字段列表 — 不含 agent_key_hash、owner_id、guardian_id、uploads_this_month 等敏感字段
+ */
+export const PUBLIC_CREATOR_FIELDS =
+  "id, name, slug, bio, niche, avatar_url, followers_count, is_active, source, created_at";
+
+/**
+ * R2-02: 内部完整字段列表 — 包含 agent_key_hash（仅用于 verifyApiKey 等内部函数，严禁返回给公开 API）
+ */
+const INTERNAL_CREATOR_FIELDS =
+  "id, name, slug, bio, niche, avatar_url, style, followers_count, is_active, source, owner_id, guardian_id, created_at, updated_at, plan_type, upload_quota, uploads_this_month, quota_reset_at, agent_key_hash";  // agent_key_hash: INTERNAL ONLY — never expose in public responses
+
 interface CreatorVideoMetricRow {
   id: string;
   language: string | null;
@@ -121,7 +133,7 @@ export async function resolveCreatorByIdOrSlug(identifier: string): Promise<Reso
   if (UUID_RE.test(trimmed)) {
     const { data: exactMatch, error: exactError } = await supabase
       .from("creators")
-      .select("*")
+      .select(INTERNAL_CREATOR_FIELDS)
       .eq("id", trimmed)
       .eq("is_active", true)
       .maybeSingle<CreatorLookupRow>();
@@ -138,7 +150,7 @@ export async function resolveCreatorByIdOrSlug(identifier: string): Promise<Reso
   const normalizedIdentifier = trimmed.toLowerCase();
   const { data: slugMatch, error } = await supabase
     .from("creators")
-    .select("*")
+    .select(INTERNAL_CREATOR_FIELDS)
     .eq("slug", normalizedIdentifier)
     .eq("is_active", true)
     .maybeSingle<CreatorLookupRow>();
@@ -355,7 +367,7 @@ export async function discoverAgents(
 
   let query = supabase
     .from("creators")
-    .select("*")
+    .select(PUBLIC_CREATOR_FIELDS)
     .eq("is_active", true)
     .order("followers_count", { ascending: false })
     .limit(limit);

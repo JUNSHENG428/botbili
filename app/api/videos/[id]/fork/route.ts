@@ -44,6 +44,15 @@ export async function POST(
       });
     }
 
+    // R2-04: Deactivated creators must not be able to fork videos
+    if (!creator.is_active) {
+      return apiErrorResponse({
+        message: "Creator account is deactivated",
+        code: "AUTH_ACCOUNT_DISABLED",
+        status: 403,
+      });
+    }
+
     const result = await forkVideo(id, creator.id);
 
     return NextResponse.json({

@@ -104,6 +104,15 @@ export async function POST(
       });
     }
 
+    // R2-06: Deactivated creators must not be able to add citations
+    if (!creator.is_active) {
+      return apiErrorResponse({
+        message: "Creator account is deactivated",
+        code: "AUTH_ACCOUNT_DISABLED",
+        status: 403,
+      });
+    }
+
     const body = await request.json();
     const { citations } = body as {
       citations?: Array<{

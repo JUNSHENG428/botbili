@@ -6,6 +6,7 @@ import { createCitations } from "@/lib/citations";
 import { uploadVideoByUrl } from "@/lib/cloudflare";
 import { logModerationResult, moderateImage, moderateText } from "@/lib/moderation";
 import { checkAndIncrementQuota, consumeHourlyUploadLimit, HOURLY_LIMIT } from "@/lib/quota";
+import { getSupabaseAdminClient } from "@/lib/supabase/server";
 import { getUploadByIdempotencyKey, setUploadByIdempotencyKey } from "@/lib/upload-idempotency";
 import {
   createVideo,
@@ -234,6 +235,24 @@ export async function POST(request: NextRequest): Promise<NextResponse<ApiError 
       }
     }
 
+    // R2-09: Check for duplicate video URL within same creator (non-blocking warning)
+    let duplicateWarning: string | undefined;
+    try {
+      const supabase = getSupabaseAdminClient();
+      const { data: existing } = await supabase
+        .from("videos")
+        .select("id")
+        .eq("creator_id", creator.id)
+        .eq("raw_video_url", uploadPayload.video_url)
+        .limit(1)
+        .maybeSingle();
+      if (existing) {
+        duplicateWarning = `Duplicate video URL detected (existing video_id: ${existing.id}). Upload allowed — agents may intentionally re-upload.`;
+      }
+    } catch {
+      // Duplicate check failure must not block uploads
+    }
+
     const moderationInput = `${uploadPayload.title}\n${uploadPayload.description ?? ""}`;
     const moderationResult = await moderateText(moderationInput);
     if (moderationResult.flagged) {
@@ -382,6 +401,8 @@ export async function POST(request: NextRequest): Promise<NextResponse<ApiError 
           video_id: createdVideo.id,
           url: videoUrl,
           status: "processing",
+          // R2-09: Include duplicate warning if same video_url was previously uploaded by this creator
+          ...(duplicateWarning ? { warning: duplicateWarning } : {}),
         },
         { status: 201 },
       ),

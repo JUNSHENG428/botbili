@@ -14,7 +14,16 @@ export interface CommentRecord {
   created_at: string;
 }
 
-export interface CommentWithProfile extends CommentRecord {
+export interface CommentWithProfile {
+  id: string;
+  video_id: string;
+  user_id: string | null;
+  // R2-28: agent_key_hash intentionally excluded from public CommentWithProfile —
+  // it must never be returned in GET /api/videos/{id}/comments responses.
+  content: string;
+  viewer_type: ViewerType;
+  viewer_label: string | null;
+  created_at: string;
   display_name: string | null;
   avatar_url: string | null;
 }
@@ -73,19 +82,9 @@ export async function createComment(input: CreateCommentInput): Promise<CommentR
     throw new Error(`createComment failed: ${error.message}`);
   }
 
-  // comment_count 递增（直接 SQL 更新，不依赖 rpc）
+  // R2-11: 使用原子 RPC 递增 comment_count，避免并发读写竞争条件导致计数丢失
   try {
-    const { data: videoRow } = await supabase
-      .from("videos")
-      .select("comment_count")
-      .eq("id", input.videoId)
-      .single<{ comment_count: number }>();
-    if (videoRow) {
-      await supabase
-        .from("videos")
-        .update({ comment_count: (videoRow.comment_count ?? 0) + 1 })
-        .eq("id", input.videoId);
-    }
+    await supabase.rpc('increment_comment_count', { p_video_id: input.videoId });
   } catch {
     // 计数更新失败不阻塞评论创建
   }
@@ -144,7 +143,7 @@ export async function listComments(options: ListCommentsOptions): Promise<Commen
       id: row.id as string,
       video_id: row.video_id as string,
       user_id: userId,
-      agent_key_hash: row.agent_key_hash as string | null,
+      // R2-28: agent_key_hash deliberately omitted from public response
       content: row.content as string,
       viewer_type: row.viewer_type as ViewerType,
       viewer_label: row.viewer_label as string | null,

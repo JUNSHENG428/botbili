@@ -259,6 +259,23 @@ export async function POST(
 
         ownerId = user.id;
       }
+
+      // R2-18: Enforce per-user channel creation limit (max 3 active channels)
+      {
+        const checkAdmin = createAdminClient();
+        const { count: channelCount } = await checkAdmin
+          .from("creators")
+          .select("id", { count: "exact", head: true })
+          .eq("owner_id", user.id)
+          .eq("is_active", true);
+        if ((channelCount ?? 0) >= 3) {
+          return apiErrorResponse({
+            message: "每个用户最多创建 3 个频道",
+            code: "CHANNEL_LIMIT_REACHED",
+            status: 429,
+          });
+        }
+      }
     }
 
     const keyPair = generateApiKey();
@@ -280,6 +297,11 @@ export async function POST(
 
     const channelUrl = `/c/${creator.slug ?? creator.id}`;
 
+    // R2-26: api_key IS intentionally included for human requests here.
+    // The /create page displays it to the user exactly once at channel creation time.
+    // The user MUST copy it immediately — it is never stored in plaintext and cannot be retrieved again.
+    // For agents: same behavior, key is shown once and must be saved.
+    // This is the correct and expected UX flow; do NOT remove api_key from this response.
     return withRateLimitHeaders(
       NextResponse.json(
         {

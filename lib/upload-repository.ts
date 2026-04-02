@@ -410,12 +410,14 @@ export async function getCreatorById(creatorId: string): Promise<Creator | null>
  */
 export async function getPublishedVideosByCreatorId(creatorId: string): Promise<VideoRecord[]> {
   const supabase = getSupabaseAdminClient();
+  // R2-14: Limit to 100 videos to prevent unbounded response payloads on public creator endpoints
   const { data, error } = await supabase
     .from("videos")
     .select("*")
     .eq("creator_id", creatorId)
     .eq("status", "published")
     .order("created_at", { ascending: false })
+    .limit(100)
     .returns<VideoRecord[]>();
 
   if (error) {

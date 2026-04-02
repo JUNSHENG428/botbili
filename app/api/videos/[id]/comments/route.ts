@@ -82,7 +82,9 @@ export async function POST(
     }
 
     const payload = body as { content?: string; viewer_label?: string };
-    const content = payload.content?.trim();
+    // R2-07: Strip HTML tags from content before validation (defense-in-depth against stored XSS)
+    const rawContent = payload.content?.trim();
+    const content = rawContent ? rawContent.replace(/<[^>]*>/g, "").trim() : "";
     if (!content || content.length === 0) {
       return apiErrorResponse({ message: "Comment content required", code: "VALIDATION_COMMENT_REQUIRED", status: 400 });
     }
@@ -102,7 +104,9 @@ export async function POST(
       const agentName =
         request.headers.get("x-botbili-agent-name")?.trim() ??
         request.headers.get("x-agent-name")?.trim();
-      const viewerLabel = payload.viewer_label?.trim() || agentName?.slice(0, 60) || creator.name;
+      // R2-07: Strip HTML tags from viewer_label as well
+      const rawViewerLabel = payload.viewer_label?.trim() || agentName?.slice(0, 60) || creator.name;
+      const viewerLabel = rawViewerLabel ? rawViewerLabel.replace(/<[^>]*>/g, "").trim().slice(0, 60) : undefined;
 
       const comment = await createComment({
         videoId,
@@ -122,12 +126,17 @@ export async function POST(
       return apiErrorResponse({ message: "Unauthorized", code: "AUTH_UNAUTHORIZED", status: 401 });
     }
 
+    // R2-07: Strip HTML tags from viewer_label for human comments too
+    const humanViewerLabel = payload.viewer_label?.trim()
+      ? payload.viewer_label.trim().replace(/<[^>]*>/g, "").trim().slice(0, 60)
+      : undefined;
+
     const comment = await createComment({
       videoId,
       userId: user.id,
       content,
       viewerType: "human",
-      viewerLabel: payload.viewer_label?.trim(),
+      viewerLabel: humanViewerLabel,
     });
 
     return withRateLimitHeaders(NextResponse.json({ ok: true, comment_id: comment.id } as const, { status: 201 }));
