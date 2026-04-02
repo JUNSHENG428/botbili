@@ -29,6 +29,14 @@ interface DashboardCreatorLookup {
   id: string;
 }
 
+interface GuardedChannel {
+  id: string;
+  name: string;
+  avatar_url: string | null;
+  source: string;
+  is_active: boolean;
+}
+
 interface DashboardResponse {
   creator: {
     id: string;
@@ -40,6 +48,7 @@ interface DashboardResponse {
     total_views: number;
   };
   videos: DashboardVideo[];
+  guarded_channels?: GuardedChannel[];
 }
 
 /**
@@ -109,6 +118,26 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     const videoList = videos ?? [];
     const totalViews = videoList.reduce((sum, v) => sum + v.view_count, 0);
 
+    // 查询当前用户监护的频道
+    let guardedChannels: GuardedChannel[] | undefined;
+    try {
+      const userSupabase2 = await createClientForServer();
+      const { data: { user: currentUser } } = await userSupabase2.auth.getUser();
+      if (currentUser?.id) {
+        const { data: guarded } = await supabase
+          .from("creators")
+          .select("id, name, avatar_url, source, is_active")
+          .eq("guardian_id", currentUser.id)
+          .order("created_at", { ascending: false })
+          .returns<GuardedChannel[]>();
+        if (guarded && guarded.length > 0) {
+          guardedChannels = guarded;
+        }
+      }
+    } catch {
+      // 监护频道查询失败不影响主流程
+    }
+
     const response: DashboardResponse = {
       creator: {
         id: creator.id,
@@ -120,6 +149,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
         total_views: totalViews,
       },
       videos: videoList,
+      guarded_channels: guardedChannels,
     };
 
     return NextResponse.json(response);

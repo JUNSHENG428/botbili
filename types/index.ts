@@ -50,6 +50,7 @@ export interface Creator {
   quota_reset_at: string;
   followers_count: number;
   source?: "agent" | "human";
+  guardian_id: string | null;
   is_active: boolean;
   created_at: string;
   updated_at: string;

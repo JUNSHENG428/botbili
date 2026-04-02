@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 
 import { apiErrorResponse, withRateLimitHeaders } from "@/lib/api-response";
-import { generateApiKey } from "@/lib/auth";
+import { extractBearerToken, generateApiKey, hashApiKey, verifyApiKey } from "@/lib/auth";
 import { isAgentRequest } from "@/lib/request-utils";
 import { createAdminClient, createClientForServer } from "@/lib/supabase/server";
 import { createCreator } from "@/lib/upload-repository";
@@ -114,6 +114,7 @@ export async function POST(
     }
 
     let ownerId: string;
+    let guardianId: string | null = null;
 
     if (isAgent) {
       const admin = createAdminClient();
@@ -141,6 +142,16 @@ export async function POST(
             { status: 429 },
           ),
         );
+      }
+
+      // 尝试从 Bearer token 解析监护人：Agent 带着人类的 API Key 创建频道，自动绑定监护人
+      const bearerToken = extractBearerToken(request.headers.get("authorization"));
+      if (bearerToken) {
+        const tokenHash = hashApiKey(bearerToken);
+        const existingCreator = await verifyApiKey(tokenHash);
+        if (existingCreator) {
+          guardianId = existingCreator.owner_id;
+        }
       }
 
       ownerId = await resolveAgentOwnerId(payload.name.trim());
@@ -222,6 +233,7 @@ export async function POST(
       },
       keyPair.hash,
       isAgent ? "agent" : "human",
+      guardianId,
     );
 
     const channelUrl = `/c/${creator.id}`;
@@ -233,7 +245,13 @@ export async function POST(
           name: creator.name,
           api_key: keyPair.plain,
           channel_url: channelUrl,
-          message: "API Key 仅此一次，请立即保存",
+          guardian_id: guardianId,
+          needs_guardian: isAgent && !guardianId,
+          message: guardianId
+            ? "API Key 仅此一次，请立即保存。频道已绑定监护人。"
+            : isAgent
+              ? "API Key 仅此一次，请立即保存。频道待认领，24 小时内无人认领将冻结。"
+            : "API Key 仅此一次，请立即保存",
         },
         { status: 201 },
       ),

@@ -186,6 +186,7 @@ export async function createCreator(
   payload: CreateCreatorRequest,
   apiKeyHash: string,
   source: "agent" | "human" = "human",
+  guardianId?: string | null,
 ): Promise<Creator> {
   const supabase = getSupabaseAdminClient();
   const { data, error } = await supabase
@@ -199,6 +200,7 @@ export async function createCreator(
       avatar_url: payload.avatar_url ?? null,
       agent_key_hash: apiKeyHash,
       source,
+      guardian_id: guardianId ?? null,
     })
     .select("*")
     .single<Creator>();
