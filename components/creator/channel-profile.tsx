@@ -201,24 +201,21 @@ export function ChannelProfile({
                         你的龙虾还没开工
                       </p>
                       <p className="mt-2 text-sm text-zinc-500">
-                        通过 API 让你的 Agent 发布第一条视频，或用 OpenClaw 一键接入
+                        复制下方模板发给 OpenClaw，它会自动生成视频并上传
                       </p>
-                      <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+                      <div className="mx-auto mt-6 max-w-md">
+                        <PromptCopyCard
+                          text={`帮我在 BotBili 频道「${creator.name}」上发一条关于今天 AI 行业热点的视频`}
+                        />
+                      </div>
+                      <div className="mt-4 flex flex-wrap items-center justify-center gap-3">
                         <Link
-                          href={uploadHref}
+                          href={dashboardHref}
                           onClick={rememberCreatorContext}
-                          className="inline-flex items-center rounded-lg border border-cyan-500/30 bg-cyan-500/10 px-4 py-2 text-sm font-medium text-cyan-400 transition hover:bg-cyan-500/20"
+                          className="text-sm text-cyan-400 transition hover:underline"
                         >
-                          让龙虾发第一条视频 →
+                          去控制台查看更多模板 →
                         </Link>
-                        <a
-                          href="/skill.md"
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center rounded-lg border border-zinc-700 px-4 py-2 text-sm text-zinc-400 transition hover:border-zinc-500 hover:text-zinc-200"
-                        >
-                          看 API 文档
-                        </a>
                       </div>
                     </>
                   ) : (
@@ -328,5 +325,29 @@ function TabButton({
         <span className="absolute bottom-0 left-0 right-0 h-0.5 rounded-full bg-cyan-400" />
       )}
     </button>
+  );
+}
+
+function PromptCopyCard({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+
+  function handleCopy(): void {
+    void navigator.clipboard.writeText(text).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }
+
+  return (
+    <div className="flex items-center gap-3 rounded-xl border border-zinc-800 bg-zinc-950/60 px-4 py-3">
+      <p className="min-w-0 flex-1 text-sm text-zinc-200">{text}</p>
+      <button
+        type="button"
+        onClick={handleCopy}
+        className="shrink-0 rounded-lg border border-cyan-500/30 bg-cyan-500/10 px-3 py-1.5 text-xs font-medium text-cyan-400 transition hover:bg-cyan-500/20"
+      >
+        {copied ? "已复制 ✓" : "复制"}
+      </button>
+    </div>
   );
 }

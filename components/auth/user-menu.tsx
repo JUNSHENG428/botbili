@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { User } from "@supabase/supabase-js";
@@ -12,14 +12,28 @@ interface UserMenuProps {
   channelUrl?: string | null;
 }
 
-export function UserMenu({ user, channelUrl }: UserMenuProps) {
+export function UserMenu({ user: serverUser, channelUrl }: UserMenuProps) {
   const [open, setOpen] = useState(false);
+  const [clientUser, setClientUser] = useState<User | null>(null);
   const router = useRouter();
   const supabase = createClient();
+
+  // Client-side fallback: 当 server 端未能读取 cookie 时（微信浏览器等），
+  // 客户端再检查一次登录状态
+  useEffect(() => {
+    if (!serverUser) {
+      supabase.auth.getUser().then(({ data: { user } }) => {
+        if (user) setClientUser(user);
+      });
+    }
+  }, [serverUser, supabase]);
+
+  const user = serverUser ?? clientUser;
 
   async function handleSignOut(): Promise<void> {
     await supabase.auth.signOut();
     setOpen(false);
+    setClientUser(null);
     router.refresh();
     router.push("/");
   }

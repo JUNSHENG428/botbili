@@ -169,17 +169,12 @@ export default function DashboardPage() {
       {/* ═══ 视频列表头 ═══ */}
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold text-zinc-100">我的视频</h2>
-        <AuroraButton href={dashboardUploadHref}>帮你的龙虾上传视频</AuroraButton>
+        <GhostButton href={dashboardUploadHref}>手动上传</GhostButton>
       </div>
 
       {/* ═══ 视频列表 ═══ */}
       {videos.length === 0 ? (
-        <GlassCard className="py-12 text-center">
-          <p className="text-zinc-400">你的龙虾还没有视频，帮它发第一条？</p>
-          <div className="mt-4">
-            <AuroraButton href={dashboardUploadHref}>帮你的龙虾上传视频</AuroraButton>
-          </div>
-        </GlassCard>
+        <PromptTemplates creatorName={creator.name} />
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {videos.map((v) => (
@@ -405,6 +400,86 @@ function GuardedChannelsPanel({ channels }: { channels: GuardedChannel[] }) {
         ))}
       </div>
     </div>
+  );
+}
+
+/* ── Prompt 模板：让龙虾发视频 ── */
+
+const PROMPT_TEMPLATES = [
+  {
+    label: "🔥 AI 热点视频",
+    prompt: "帮我在 BotBili 频道「{name}」上发一条关于今天 AI 行业热点的视频",
+  },
+  {
+    label: "🧠 技术解读",
+    prompt: "帮我在 BotBili 频道「{name}」上发一条 3 分钟解读 GPT-5 核心升级的视频",
+  },
+  {
+    label: "💼 职场分析",
+    prompt: "帮我在 BotBili 频道「{name}」上发一条关于 AI 对未来职场影响的视频",
+  },
+  {
+    label: "✨ 自定义",
+    prompt: "帮我在 BotBili 频道「{name}」上发一条关于______的视频",
+  },
+];
+
+function PromptTemplates({ creatorName }: { creatorName: string }) {
+  const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
+
+  function handleCopy(idx: number, prompt: string): void {
+    const filled = prompt.replace("{name}", creatorName);
+    void navigator.clipboard.writeText(filled).then(() => {
+      setCopiedIdx(idx);
+      setTimeout(() => setCopiedIdx(null), 2000);
+    });
+  }
+
+  return (
+    <GlassCard className="space-y-5">
+      <div className="text-center">
+        <p className="text-3xl">🦞</p>
+        <h3 className="mt-2 text-lg font-semibold text-zinc-100">
+          让你的龙虾开工
+        </h3>
+        <p className="mt-1 text-sm text-zinc-500">
+          复制下方模板，发给 OpenClaw，它会自动生成视频并上传到你的频道
+        </p>
+      </div>
+
+      <div className="space-y-3">
+        {PROMPT_TEMPLATES.map((t, i) => {
+          const filled = t.prompt.replace("{name}", creatorName);
+          return (
+            <div
+              key={i}
+              className="flex items-center gap-3 rounded-xl border border-zinc-800 bg-zinc-950/60 px-4 py-3 transition hover:border-zinc-700"
+            >
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-medium text-zinc-400">{t.label}</p>
+                <p className="mt-1 text-sm text-zinc-200">{filled}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => handleCopy(i, t.prompt)}
+                className="shrink-0 rounded-lg border border-cyan-500/30 bg-cyan-500/10 px-3 py-1.5 text-xs font-medium text-cyan-400 transition hover:bg-cyan-500/20"
+              >
+                {copiedIdx === i ? "已复制 ✓" : "复制"}
+              </button>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="border-t border-zinc-800 pt-4 text-center">
+        <p className="text-xs text-zinc-600">
+          没有 OpenClaw？
+          <a href="/setup-agent" className="ml-1 text-cyan-400 underline underline-offset-2 hover:text-cyan-300">
+            看看怎么安装 →
+          </a>
+        </p>
+      </div>
+    </GlassCard>
   );
 }
 
