@@ -2,10 +2,30 @@ import Link from "next/link";
 
 import { UserMenu } from "@/components/auth/user-menu";
 import { getUser } from "@/lib/get-user";
+import { getCreatorSlug } from "@/lib/agent-card";
+import { createClientForServer } from "@/lib/supabase/server";
 import { NavbarOpenClawLink } from "./navbar-openclaw-link";
+
+async function getUserChannelUrl(userId: string): Promise<string | null> {
+  try {
+    const supabase = await createClientForServer();
+    const { data } = await supabase
+      .from("creators")
+      .select("id, name")
+      .eq("owner_id", userId)
+      .eq("is_active", true)
+      .limit(1)
+      .maybeSingle();
+    if (!data) return null;
+    return `/c/${getCreatorSlug(data)}`;
+  } catch {
+    return null;
+  }
+}
 
 export async function Navbar() {
   const user = await getUser();
+  const channelUrl = user?.id ? await getUserChannelUrl(user.id) : null;
 
   return (
     <header className="relative z-50 border-b border-zinc-800 bg-zinc-950/90 backdrop-blur">
@@ -54,7 +74,7 @@ export async function Navbar() {
               申请内测
             </Link>
           )}
-          <UserMenu user={user} />
+          <UserMenu user={user} channelUrl={channelUrl} />
         </div>
       </div>
     </header>

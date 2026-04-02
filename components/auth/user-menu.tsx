@@ -9,9 +9,10 @@ import { createClient } from "@/lib/supabase/client";
 
 interface UserMenuProps {
   user: User | null;
+  channelUrl?: string | null;
 }
 
-export function UserMenu({ user }: UserMenuProps) {
+export function UserMenu({ user, channelUrl }: UserMenuProps) {
   const [open, setOpen] = useState(false);
   const router = useRouter();
   const supabase = createClient();
@@ -60,8 +61,18 @@ export function UserMenu({ user }: UserMenuProps) {
             <div className="border-b border-zinc-800 px-3 py-2">
               <p className="truncate text-sm text-zinc-300">{user.email}</p>
             </div>
+            {channelUrl && (
+              <Link
+                href={channelUrl}
+                onClick={() => setOpen(false)}
+                className="block px-3 py-2 text-sm text-zinc-400 transition hover:bg-zinc-800/50 hover:text-zinc-200"
+              >
+                我的频道
+              </Link>
+            )}
             <Link
               href="/dashboard"
+              onClick={() => setOpen(false)}
               className="block px-3 py-2 text-sm text-zinc-400 transition hover:bg-zinc-800/50 hover:text-zinc-200"
             >
               控制台
