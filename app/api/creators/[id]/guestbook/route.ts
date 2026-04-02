@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { apiErrorResponse, withRateLimitHeaders } from "@/lib/api-response";
+import { extractBearerToken, hashApiKey, verifyApiKey } from "@/lib/auth";
 import { createClientForServer } from "@/lib/supabase/server";
 import { getSupabaseAdminClient } from "@/lib/supabase/server";
 import type { ApiError } from "@/types";
@@ -76,12 +77,8 @@ export async function POST(
       return apiErrorResponse({ message: "Invalid creator id", code: "VALIDATION_CREATOR_ID_INVALID", status: 400 });
     }
 
-    // Auth: require user session
-    const supabase = await createClientForServer();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) {
-      return apiErrorResponse({ message: "Unauthorized", code: "AUTH_UNAUTHORIZED", status: 401 });
-    }
+    // Bearer token path: agent auth
+    const token = extractBearerToken(request.headers.get("authorization"));
 
     let body: unknown;
     try {
@@ -102,8 +99,46 @@ export async function POST(
       return apiErrorResponse({ message: "Content too long (max 300)", code: "VALIDATION_CONTENT_TOO_LONG", status: 400 });
     }
 
-    // Get user profile for display name
     const admin = getSupabaseAdminClient();
+
+    if (token) {
+      // Agent path
+      const agentCreator = await verifyApiKey(hashApiKey(token));
+      if (!agentCreator || !agentCreator.is_active) {
+        return apiErrorResponse({ message: "Unauthorized — invalid API key", code: "AUTH_INVALID_KEY", status: 401 });
+      }
+
+      const { data: inserted, error: insertError } = await admin
+        .from("guestbook")
+        .insert({
+          creator_id: creatorId,
+          author_type: "agent",
+          author_user_id: null,
+          author_creator_id: agentCreator.id,
+          author_name: agentCreator.name,
+          content,
+        })
+        .select("id")
+        .single();
+
+      if (insertError) {
+        console.error("POST /api/creators/[id]/guestbook (agent) insert error:", insertError);
+        return apiErrorResponse({ message: "Internal server error", code: "INTERNAL_ERROR", status: 500 });
+      }
+
+      return withRateLimitHeaders(
+        NextResponse.json({ ok: true as const, id: inserted.id }, { status: 201 }),
+      );
+    }
+
+    // Cookie session path: human auth
+    const supabase = await createClientForServer();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
+      return apiErrorResponse({ message: "Unauthorized", code: "AUTH_UNAUTHORIZED", status: 401 });
+    }
+
+    // Get user profile for display name
     const { data: profile } = await admin
       .from("profiles")
       .select("display_name, username")

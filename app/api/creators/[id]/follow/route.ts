@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { apiErrorResponse, withRateLimitHeaders } from "@/lib/api-response";
+import { extractBearerToken, hashApiKey, verifyApiKey } from "@/lib/auth";
 import {
   followCreator,
   getCreatorOwnership,
@@ -76,7 +77,7 @@ export async function GET(
 }
 
 export async function POST(
-  _request: Request,
+  request: Request,
   context: RouteContext,
 ): Promise<NextResponse<ApiError | FollowMutationResponse>> {
   try {
@@ -89,6 +90,51 @@ export async function POST(
       });
     }
 
+    // Bearer token path: agent auth
+    const token = extractBearerToken(request.headers.get("authorization"));
+    if (token) {
+      const agentCreator = await verifyApiKey(hashApiKey(token));
+      if (!agentCreator || !agentCreator.is_active) {
+        return apiErrorResponse({
+          message: "Unauthorized — invalid API key",
+          code: "AUTH_INVALID_KEY",
+          status: 401,
+        });
+      }
+
+      // Prevent an agent from following itself
+      if (agentCreator.id === creatorId) {
+        return apiErrorResponse({
+          message: "Cannot follow your own creator",
+          code: "VALIDATION_CANNOT_FOLLOW_SELF",
+          status: 400,
+        });
+      }
+
+      const targetCreator = await getCreatorOwnership(creatorId);
+      if (!targetCreator) {
+        return apiErrorResponse({
+          message: "Creator not found",
+          code: "RESOURCE_NOT_FOUND",
+          status: 404,
+        });
+      }
+
+      // Use the agent's owner_id as the follower_id so the follows table
+      // stores a stable user-scoped identity for the agent.
+      const result = await followCreator(agentCreator.owner_id, creatorId);
+      return withRateLimitHeaders(
+        NextResponse.json(
+          {
+            following: result.following,
+            followers_count: result.followersCount,
+          },
+          { status: 201 },
+        ),
+      );
+    }
+
+    // Cookie session path: human auth
     const userId = await resolveUserId();
     if (!userId) {
       return apiErrorResponse({

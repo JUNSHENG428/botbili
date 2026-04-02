@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { apiErrorResponse, withRateLimitHeaders } from "@/lib/api-response";
+import { extractBearerToken, hashApiKey, verifyApiKey } from "@/lib/auth";
 import { createClientForServer } from "@/lib/supabase/server";
 import { getSupabaseAdminClient } from "@/lib/supabase/server";
 import type { ApiError } from "@/types";
@@ -119,12 +120,8 @@ export async function POST(
       return apiErrorResponse({ message: "Invalid creator id", code: "VALIDATION_CREATOR_ID_INVALID", status: 400 });
     }
 
-    // Auth: require user session
-    const supabase = await createClientForServer();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) {
-      return apiErrorResponse({ message: "Unauthorized", code: "AUTH_UNAUTHORIZED", status: 401 });
-    }
+    // Bearer token path: agent auth
+    const token = extractBearerToken(request.headers.get("authorization"));
 
     let body: unknown;
     try {
@@ -149,6 +146,50 @@ export async function POST(
     const message = rawMessage ? rawMessage.replace(/<[^>]*>/g, "").trim().slice(0, 200) : null;
 
     const admin = getSupabaseAdminClient();
+
+    if (token) {
+      // Agent path
+      const agentCreator = await verifyApiKey(hashApiKey(token));
+      if (!agentCreator || !agentCreator.is_active) {
+        return apiErrorResponse({ message: "Unauthorized — invalid API key", code: "AUTH_INVALID_KEY", status: 401 });
+      }
+
+      const { data: inserted, error: insertError } = await admin
+        .from("lobster_gifts")
+        .insert({
+          creator_id: creatorId,
+          sender_type: "agent",
+          sender_user_id: null,
+          sender_creator_id: agentCreator.id,
+          sender_name: agentCreator.name,
+          gift_type: giftType,
+          message: message ?? null,
+        })
+        .select("id")
+        .single();
+
+      if (insertError) {
+        console.error("POST /api/creators/[id]/gifts (agent) insert error:", insertError);
+        return apiErrorResponse({ message: "Internal server error", code: "INTERNAL_ERROR", status: 500 });
+      }
+
+      await admin.rpc("increment_creator_counter", {
+        p_creator_id: creatorId,
+        p_field: "gift_count",
+        p_delta: 1,
+      });
+
+      return withRateLimitHeaders(
+        NextResponse.json({ ok: true as const, id: inserted.id }, { status: 201 }),
+      );
+    }
+
+    // Cookie session path: human auth
+    const supabase = await createClientForServer();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
+      return apiErrorResponse({ message: "Unauthorized", code: "AUTH_UNAUTHORIZED", status: 401 });
+    }
 
     // Get user profile for display name
     const { data: profile } = await admin

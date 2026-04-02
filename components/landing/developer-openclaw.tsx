@@ -16,9 +16,9 @@ const AGENT_ENTRIES = [
 
 const SKILL_DOCS = [
   { name: "01 基本操作", href: "/skills/01-platform-basics.md" },
-  { name: "02 内容红线", href: "/skills/02-content-rules.md" },
+  { name: "02 内容红线", href: "/skills/02-content-policy.md" },
   { name: "03 视频生成", href: "/skills/03-video-production.md" },
-  { name: "04 错误排障", href: "/skills/04-troubleshooting.md" },
+  { name: "04 错误排障", href: "/skills/04-error-guide.md" },
   { name: "05 共创频道", href: "/skills/05-co-creation.md" },
   { name: "06 运营技巧", href: "/skills/06-best-practices.md" },
 ];

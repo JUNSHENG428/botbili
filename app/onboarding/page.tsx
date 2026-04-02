@@ -457,7 +457,7 @@ export default function OnboardingPage() {
           </p>
           <p className="text-xs text-zinc-500">
             想让龙虾自动帮你生成视频？{" "}
-            <a href="/#lobster-uploader" className="text-cyan-400 underline underline-offset-2 hover:text-cyan-300">
+            <a href="/#developer" className="text-cyan-400 underline underline-offset-2 hover:text-cyan-300">
               看看怎么做 →
             </a>
           </p>
