@@ -8,7 +8,7 @@ export async function Navbar() {
   const user = await getUser();
 
   return (
-    <header className="border-b border-zinc-800 bg-zinc-950/90 backdrop-blur">
+    <header className="relative z-50 border-b border-zinc-800 bg-zinc-950/90 backdrop-blur">
       <div className="mx-auto flex h-14 w-full max-w-6xl items-center justify-between px-4">
         <div className="flex items-center gap-5">
           <Link href="/" className="text-base font-semibold tracking-wide text-zinc-100">
