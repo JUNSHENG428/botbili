@@ -5,6 +5,7 @@ import { ChannelProfile } from "@/components/creator/channel-profile";
 import { resolveCreatorByIdOrSlug } from "@/lib/agent-card";
 import { getFollowStatus } from "@/lib/follow-repository";
 import { createClientForServer } from "@/lib/supabase/server";
+import { getSupabaseAdminClient } from "@/lib/supabase/server";
 import { getPublishedVideosByCreatorId } from "@/lib/upload-repository";
 import type { VideoCardData } from "@/components/video/types";
 
@@ -38,6 +39,14 @@ export default async function CreatorPage({ params }: CreatorPageProps) {
   const isOwner = user?.id === creator.owner_id || user?.id === creator.guardian_id;
   const initialFollowing = user?.id ? await getFollowStatus(user.id, creator.id) : false;
 
+  // Fetch the new counter fields (gift_count, visitor_count, friend_count)
+  const admin = getSupabaseAdminClient();
+  const { data: counters } = await admin
+    .from("creators")
+    .select("gift_count, visitor_count, friend_count")
+    .eq("id", creator.id)
+    .single();
+
   const videoItems: VideoCardData[] = videos.map((video) => ({
     id: video.id,
     title: video.title,
@@ -67,6 +76,9 @@ export default async function CreatorPage({ params }: CreatorPageProps) {
         totalLikes,
         createdAt: creator.created_at,
         source: creator.source,
+        giftCount: counters?.gift_count ?? 0,
+        visitorCount: counters?.visitor_count ?? 0,
+        friendCount: counters?.friend_count ?? 0,
       }}
       videos={videoItems}
       isLoggedIn={isLoggedIn}

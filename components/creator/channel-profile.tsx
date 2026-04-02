@@ -4,6 +4,10 @@ import Link from "next/link";
 import { useState } from "react";
 
 import { FollowButton } from "@/components/creator/follow-button";
+import { LobsterGifts } from "@/components/creator/lobster-gifts";
+import { LobsterGuestbook } from "@/components/creator/lobster-guestbook";
+import { LobsterFriends } from "@/components/creator/lobster-friends";
+import { LobsterVisitors } from "@/components/creator/lobster-visitors";
 import { GlassCard } from "@/components/design/glass-card";
 import { VideoGrid } from "@/components/video/video-grid";
 import { formatViewCount } from "@/lib/format";
@@ -24,6 +28,9 @@ interface ChannelCreator {
   totalLikes: number;
   createdAt: string;
   source?: "agent" | "human";
+  giftCount?: number;
+  visitorCount?: number;
+  friendCount?: number;
 }
 
 interface ChannelProfileProps {
@@ -175,7 +182,7 @@ export function ChannelProfile({
           <TabButton
             active={activeTab === "about"}
             onClick={() => setActiveTab("about")}
-            label="简介"
+            label="龙虾档案"
           />
         </div>
 
@@ -225,36 +232,22 @@ export function ChannelProfile({
           )}
 
           {activeTab === "about" && (
-            <div className="mx-auto max-w-2xl space-y-6">
-              {/* Bio */}
-              <GlassCard>
-                <h3 className="text-sm font-medium text-zinc-400">频道简介</h3>
-                <p className="mt-2 text-sm leading-relaxed text-zinc-200">
+            <div className="mx-auto max-w-2xl space-y-4">
+              {/* ── 频道简介 ── */}
+              <GlassCard className="p-4">
+                <h3 className="mb-2 text-sm font-semibold text-zinc-300">频道简介</h3>
+                <p className="text-sm leading-relaxed text-zinc-200">
                   {creator.bio || "这位 UP 主很懒，还没有填写简介"}
                 </p>
-              </GlassCard>
+                <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-zinc-500">
+                  <span>创建于 {joinStr}</span>
+                  {creator.niche && <span>领域：{creator.niche}</span>}
+                </div>
 
-              {/* Info cards */}
-              <div className="grid gap-4 sm:grid-cols-2">
-                <GlassCard>
-                  <h3 className="text-sm font-medium text-zinc-400">创建时间</h3>
-                  <p className="mt-1 text-sm text-zinc-200">{joinStr}</p>
-                </GlassCard>
-                <GlassCard>
-                  <h3 className="text-sm font-medium text-zinc-400">领域</h3>
-                  <p className="mt-1 text-sm text-zinc-200">
-                    {creator.niche || "综合"}
-                  </p>
-                </GlassCard>
-              </div>
-
-              {/* Agent-specific: API info */}
-              {creator.source === "agent" && (
-                <GlassCard>
-                  <h3 className="text-sm font-medium text-violet-400">
-                    Agent 信息
-                  </h3>
-                  <div className="mt-3 space-y-2">
+                {/* Agent-specific info */}
+                {creator.source === "agent" && (
+                  <div className="mt-3 space-y-1.5 border-t border-zinc-800 pt-3">
+                    <p className="text-xs font-medium text-violet-400">Agent 信息</p>
                     <div className="flex items-center gap-2">
                       <span className="text-xs text-zinc-500">Agent Card:</span>
                       <a
@@ -278,8 +271,29 @@ export function ChannelProfile({
                       </a>
                     </div>
                   </div>
-                </GlassCard>
-              )}
+                )}
+              </GlassCard>
+
+              {/* ── 礼物 ── */}
+              <LobsterGifts
+                creatorId={creator.id}
+                initialGiftCount={creator.giftCount ?? 0}
+              />
+
+              {/* ── 留言板 ── */}
+              <LobsterGuestbook creatorId={creator.id} />
+
+              {/* ── 龙虾好友 ── */}
+              <LobsterFriends
+                creatorId={creator.id}
+                initialFriendCount={creator.friendCount ?? 0}
+              />
+
+              {/* ── 最近访客 ── */}
+              <LobsterVisitors
+                creatorId={creator.id}
+                initialVisitorCount={creator.visitorCount ?? 0}
+              />
             </div>
           )}
         </div>
