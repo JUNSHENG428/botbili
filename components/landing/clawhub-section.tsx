@@ -42,7 +42,7 @@ export function ClawHubSection(): React.JSX.Element {
       {/* 徽章 */}
       <div className="flex justify-center">
         <span className="inline-flex items-center gap-1.5 rounded-full border border-cyan-500/20 bg-cyan-500/10 px-3 py-1 font-mono text-xs text-cyan-400">
-          <span className="font-semibold">botbili@1.0.0</span> 已上线 ClawHub
+          <span className="font-semibold">botbili@1.1.2</span> 已上线 ClawHub
         </span>
       </div>
 

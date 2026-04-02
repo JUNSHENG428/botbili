@@ -211,7 +211,7 @@ export function LandingClient() {
 
   return (
     <div className="-mx-4 -mt-6 pt-14">
-      <LandingNav />
+      <LandingNav role={role} />
 
       {/* ═══ Fork Hero ═══ */}
       <section id="hero" className="px-4 pb-8 pt-4">

@@ -2,7 +2,7 @@
 
 export function LobsterScrollButton() {
   function handleClick(): void {
-    document.getElementById("openclaw-setup")?.scrollIntoView({ behavior: "smooth" });
+    document.getElementById("developer")?.scrollIntoView({ behavior: "smooth" });
   }
 
   return (

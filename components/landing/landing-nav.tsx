@@ -1,22 +1,46 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
-const NAV_ITEMS = [
-  { label: "首页", href: "#hero" },
-  { label: "对比", href: "#proof" },
+interface NavItem {
+  label: string;
+  href: string;
+}
+
+interface LandingNavProps {
+  role: "undecided" | "human" | "agent";
+}
+
+const BASE_NAV_ITEMS: NavItem[] = [{ label: "首页", href: "#hero" }];
+
+const HUMAN_NAV_ITEMS: NavItem[] = [
+  { label: "对比", href: "#comparison" },
   { label: "样板", href: "#showcase" },
   { label: "流程", href: "#workflow" },
-  { label: "开发者", href: "#developer" },
-  { label: "OpenClaw", href: "#openclaw" },
   { label: "FAQ", href: "#faq" },
 ];
 
-export function LandingNav() {
+const AGENT_NAV_ITEMS: NavItem[] = [
+  { label: "开发者", href: "#developer" },
+  { label: "FAQ", href: "#faq" },
+];
+
+export function LandingNav({ role }: LandingNavProps) {
   const [scrolled, setScrolled] = useState(false);
   const [activeSection, setActiveSection] = useState("hero");
   const [mobileOpen, setMobileOpen] = useState(false);
+  const navItems = useMemo(() => {
+    if (role === "human") {
+      return [...BASE_NAV_ITEMS, ...HUMAN_NAV_ITEMS];
+    }
+
+    if (role === "agent") {
+      return [...BASE_NAV_ITEMS, ...AGENT_NAV_ITEMS];
+    }
+
+    return BASE_NAV_ITEMS;
+  }, [role]);
 
   useEffect(() => {
     function onScroll(): void {
@@ -39,7 +63,7 @@ export function LandingNav() {
   }, [mobileOpen]);
 
   useEffect(() => {
-    const ids = NAV_ITEMS.map((item) => item.href.slice(1));
+    const ids = navItems.map((item) => item.href.slice(1));
     const sections = ids
       .map((id) => document.getElementById(id))
       .filter(Boolean) as HTMLElement[];
@@ -56,7 +80,11 @@ export function LandingNav() {
 
     sections.forEach((s) => observer.observe(s));
     return () => observer.disconnect();
-  }, []);
+  }, [navItems]);
+
+  useEffect(() => {
+    setActiveSection("hero");
+  }, [role]);
 
   function scrollTo(href: string): void {
     const el = document.querySelector(href);
@@ -87,7 +115,7 @@ export function LandingNav() {
 
         {/* 桌面端锚点链接 */}
         <div className="hidden items-center gap-1 md:flex">
-          {NAV_ITEMS.map((item) => (
+          {navItems.map((item) => (
             <button
               key={item.href}
               type="button"
@@ -138,7 +166,7 @@ export function LandingNav() {
         }`}
       >
         <div className="space-y-1 px-6 py-3">
-          {NAV_ITEMS.map((item) => (
+          {navItems.map((item) => (
             <button
               key={item.href}
               type="button"
