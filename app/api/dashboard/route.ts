@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { getSupabaseAdminClient } from "@/lib/supabase/server";
+import { createClientForServer, getSupabaseAdminClient } from "@/lib/supabase/server";
 
 interface DashboardCreator {
   id: string;
@@ -25,6 +25,10 @@ interface DashboardVideo {
   created_at: string;
 }
 
+interface DashboardCreatorLookup {
+  id: string;
+}
+
 interface DashboardResponse {
   creator: {
     id: string;
@@ -43,14 +47,42 @@ interface DashboardResponse {
  * 聚合返回频道信息 + 视频列表（MVP 无需认证）。
  */
 export async function GET(req: NextRequest): Promise<NextResponse> {
-  const creatorId = req.nextUrl.searchParams.get("creator_id")?.trim();
-
-  if (!creatorId) {
-    return NextResponse.json({ error: "缺少频道信息" }, { status: 400 });
-  }
-
   try {
+    const requestedCreatorId = req.nextUrl.searchParams.get("creator_id")?.trim() ?? "";
     const supabase = getSupabaseAdminClient();
+    let creatorId = requestedCreatorId;
+
+    // 允许已登录用户在未显式传 creator_id 时，自动解析自己的默认频道。
+    if (!creatorId) {
+      const userSupabase = await createClientForServer();
+      const {
+        data: { user },
+      } = await userSupabase.auth.getUser();
+
+      if (!user?.id) {
+        return NextResponse.json({ error: "频道不存在" }, { status: 404 });
+      }
+
+      const { data: ownedCreator, error: ownedCreatorErr } = await supabase
+        .from("creators")
+        .select("id")
+        .eq("owner_id", user.id)
+        .eq("is_active", true)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle<DashboardCreatorLookup>();
+
+      if (ownedCreatorErr) {
+        console.error("dashboard owner creator query error:", ownedCreatorErr);
+        return NextResponse.json({ error: "加载频道失败" }, { status: 500 });
+      }
+
+      if (!ownedCreator) {
+        return NextResponse.json({ error: "频道不存在" }, { status: 404 });
+      }
+
+      creatorId = ownedCreator.id;
+    }
 
     const { data: creator, error: creatorErr } = await supabase
       .from("creators")

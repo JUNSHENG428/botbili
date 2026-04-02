@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 
 import { AuroraButton } from "@/components/design/aurora-button";
 import { GhostButton } from "@/components/design/ghost-button";
@@ -45,29 +46,61 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 export default function DashboardPage() {
+  const searchParams = useSearchParams();
   const [state, setState] = useState<LoadState>("loading");
   const [data, setData] = useState<DashboardData | null>(null);
   const [devOpen, setDevOpen] = useState(false);
+  const creatorIdFromQuery = searchParams.get("creator_id")?.trim() ?? "";
+
+  function persistCreatorId(creatorId: string): void {
+    try {
+      localStorage.setItem("botbili_creator_id", creatorId);
+    } catch {
+      // 忽略本地存储异常，仍可依赖 URL 中的 creator_id 工作。
+    }
+  }
 
   useEffect(() => {
-    const creatorId = localStorage.getItem("botbili_creator_id");
-    if (!creatorId) {
-      setState("no_creator");
-      return;
-    }
+    let cancelled = false;
 
-    fetch(`/api/dashboard?creator_id=${encodeURIComponent(creatorId)}`)
-      .then(async (res) => {
+    async function loadDashboard(): Promise<void> {
+      const creatorIdFromStorage = localStorage.getItem("botbili_creator_id")?.trim() ?? "";
+      const resolvedCreatorId = creatorIdFromQuery || creatorIdFromStorage;
+
+      if (creatorIdFromQuery) {
+        persistCreatorId(creatorIdFromQuery);
+      }
+
+      const endpoint = resolvedCreatorId
+        ? `/api/dashboard?creator_id=${encodeURIComponent(resolvedCreatorId)}`
+        : "/api/dashboard";
+
+      try {
+        const res = await fetch(endpoint);
+        if (cancelled) return;
+
         if (!res.ok) {
           setState(res.status === 404 ? "no_creator" : "error");
           return;
         }
+
         const json = (await res.json()) as DashboardData;
         setData(json);
         setState("loaded");
-      })
-      .catch(() => setState("error"));
-  }, []);
+        persistCreatorId(json.creator.id);
+      } catch {
+        if (!cancelled) {
+          setState("error");
+        }
+      }
+    }
+
+    void loadDashboard();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [creatorIdFromQuery]);
 
   /* ── Loading ── */
   if (state === "loading") {
@@ -99,6 +132,7 @@ export default function DashboardPage() {
   }
 
   const { creator, videos } = data;
+  const dashboardUploadHref = `/dashboard/upload?creator_id=${encodeURIComponent(creator.id)}`;
 
   return (
     <div className="mx-auto max-w-4xl space-y-8 px-4 py-8">
@@ -126,7 +160,7 @@ export default function DashboardPage() {
       {/* ═══ 视频列表头 ═══ */}
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold text-zinc-100">我的视频</h2>
-        <AuroraButton href="/dashboard/upload">上传新视频</AuroraButton>
+        <AuroraButton href={dashboardUploadHref}>上传新视频</AuroraButton>
       </div>
 
       {/* ═══ 视频列表 ═══ */}
@@ -134,7 +168,7 @@ export default function DashboardPage() {
         <GlassCard className="py-12 text-center">
           <p className="text-zinc-400">还没有视频，上传一条试试？</p>
           <div className="mt-4">
-            <AuroraButton href="/dashboard/upload">上传第一条视频</AuroraButton>
+            <AuroraButton href={dashboardUploadHref}>上传第一条视频</AuroraButton>
           </div>
         </GlassCard>
       ) : (

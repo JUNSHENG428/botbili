@@ -109,6 +109,11 @@ export default function CreatePage() {
         return;
       }
       setResult(data as CreateCreatorResponse);
+      try {
+        localStorage.setItem("botbili_creator_id", (data as CreateCreatorResponse).creator_id);
+      } catch {
+        // 忽略本地存储异常，页面链接仍会带 creator_id 查询参数兜底。
+      }
       setSuccessText("创建成功");
     } catch (error: unknown) {
       setErrorText(error instanceof Error ? error.message : "创建失败");
@@ -127,6 +132,9 @@ export default function CreatePage() {
 
   /* ── 创建成功后的完整引导 ── */
   if (result) {
+    const dashboardHref = `/dashboard?creator_id=${encodeURIComponent(result.creator_id)}`;
+    const uploadHref = `/dashboard/upload?creator_id=${encodeURIComponent(result.creator_id)}`;
+
     return (
       <div className="mx-auto max-w-2xl space-y-6 py-4">
         {/* 成功头 */}
@@ -381,13 +389,13 @@ export default function CreatePage() {
         {/* 操作按钮 */}
         <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
           <Link
-            href="/dashboard"
+            href={dashboardHref}
             className="rounded-lg border border-cyan-500/30 bg-cyan-500/10 px-5 py-2.5 text-sm font-medium text-cyan-300 transition hover:bg-cyan-500/20"
           >
             进入我的频道
           </Link>
           <Link
-            href="/dashboard/upload"
+            href={uploadHref}
             className="rounded-lg border border-zinc-700 px-5 py-2.5 text-sm text-zinc-400 transition hover:border-zinc-600 hover:text-zinc-300"
           >
             手动上传视频

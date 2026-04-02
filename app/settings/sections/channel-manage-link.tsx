@@ -11,7 +11,7 @@ export function ChannelManageLink({ creatorId }: ChannelManageLinkProps) {
 
   return (
     <a
-      href="/dashboard"
+      href={`/dashboard?creator_id=${encodeURIComponent(creatorId)}`}
       onClick={handleClick}
       className="ml-4 shrink-0 text-xs text-zinc-500 transition hover:text-zinc-300"
     >

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 
 import { AuroraButton } from "@/components/design/aurora-button";
 import { GhostButton } from "@/components/design/ghost-button";
@@ -10,8 +11,15 @@ import { useToast } from "@/components/ui/toast";
 
 type SubmitState = "idle" | "submitting" | "success";
 
+interface DashboardLookupResponse {
+  creator: {
+    id: string;
+  };
+}
+
 export default function UploadPage() {
   const { toast } = useToast();
+  const searchParams = useSearchParams();
 
   const [creatorId, setCreatorId] = useState<string | null>(null);
   const [title, setTitle] = useState("");
@@ -22,10 +30,65 @@ export default function UploadPage() {
   const [submitState, setSubmitState] = useState<SubmitState>("idle");
   const [errorMsg, setErrorMsg] = useState("");
   const [resultUrl, setResultUrl] = useState("");
+  const creatorIdFromQuery = searchParams.get("creator_id")?.trim() ?? "";
+
+  function persistCreatorId(value: string): void {
+    try {
+      localStorage.setItem("botbili_creator_id", value);
+    } catch {
+      // 忽略本地存储异常，URL 查询参数仍可作为上下文来源。
+    }
+  }
 
   useEffect(() => {
-    setCreatorId(localStorage.getItem("botbili_creator_id"));
-  }, []);
+    let cancelled = false;
+
+    async function resolveCreatorId(): Promise<void> {
+      const creatorIdFromStorage = localStorage.getItem("botbili_creator_id")?.trim() ?? "";
+      const resolvedCreatorId = creatorIdFromQuery || creatorIdFromStorage;
+
+      if (creatorIdFromQuery) {
+        persistCreatorId(creatorIdFromQuery);
+      }
+
+      if (resolvedCreatorId) {
+        if (!cancelled) {
+          setCreatorId(resolvedCreatorId);
+        }
+        return;
+      }
+
+      try {
+        const res = await fetch("/api/dashboard");
+        if (!res.ok) {
+          if (!cancelled) {
+            setCreatorId("");
+          }
+          return;
+        }
+
+        const json = (await res.json()) as DashboardLookupResponse;
+        if (cancelled) return;
+
+        setCreatorId(json.creator.id);
+        persistCreatorId(json.creator.id);
+      } catch {
+        if (!cancelled) {
+          setCreatorId("");
+        }
+      }
+    }
+
+    void resolveCreatorId();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [creatorIdFromQuery]);
+
+  const dashboardHref = creatorId
+    ? `/dashboard?creator_id=${encodeURIComponent(creatorId)}`
+    : "/dashboard";
 
   async function handleSubmit(): Promise<void> {
     setErrorMsg("");
@@ -86,7 +149,7 @@ export default function UploadPage() {
         <h1 className="text-2xl font-bold text-zinc-50">视频已发布！</h1>
         <div className="flex gap-3">
           <AuroraButton href={resultUrl}>查看视频</AuroraButton>
-          <GhostButton href="/dashboard">回到频道</GhostButton>
+          <GhostButton href={dashboardHref}>回到频道</GhostButton>
         </div>
       </div>
     );
@@ -94,7 +157,7 @@ export default function UploadPage() {
 
   return (
     <div className="mx-auto max-w-lg px-4 py-10">
-      <Link href="/dashboard" className="mb-6 inline-block text-sm text-zinc-500 transition hover:text-zinc-300">
+      <Link href={dashboardHref} className="mb-6 inline-block text-sm text-zinc-500 transition hover:text-zinc-300">
         ← 回到频道
       </Link>
 

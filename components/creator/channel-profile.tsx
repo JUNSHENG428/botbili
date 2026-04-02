@@ -49,6 +49,16 @@ export function ChannelProfile({
 
   const joinDate = new Date(creator.createdAt);
   const joinStr = `${joinDate.getFullYear()} 年 ${joinDate.getMonth() + 1} 月`;
+  const dashboardHref = `/dashboard?creator_id=${encodeURIComponent(creator.id)}`;
+  const uploadHref = `/dashboard/upload?creator_id=${encodeURIComponent(creator.id)}`;
+
+  function rememberCreatorContext(): void {
+    try {
+      localStorage.setItem("botbili_creator_id", creator.id);
+    } catch {
+      // 忽略本地存储异常，dashboard 会继续读取 URL 查询参数。
+    }
+  }
 
   return (
     <div className="-mx-4 -mt-6">
@@ -122,7 +132,8 @@ export function ChannelProfile({
             <div className="flex shrink-0 items-center gap-2">
               {isOwner && (
                 <Link
-                  href="/dashboard"
+                  href={dashboardHref}
+                  onClick={rememberCreatorContext}
                   className="rounded-lg border border-zinc-700 px-3 py-1.5 text-sm text-zinc-300 transition hover:border-zinc-500 hover:bg-zinc-800/60"
                 >
                   管理我的龙虾
@@ -187,7 +198,8 @@ export function ChannelProfile({
                       </p>
                       <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
                         <Link
-                          href="/dashboard"
+                          href={uploadHref}
+                          onClick={rememberCreatorContext}
                           className="inline-flex items-center rounded-lg border border-cyan-500/30 bg-cyan-500/10 px-4 py-2 text-sm font-medium text-cyan-400 transition hover:bg-cyan-500/20"
                         >
                           让龙虾发第一条视频 →
