@@ -386,7 +386,7 @@ export default function OnboardingPage() {
           <div className="flex items-center justify-between pt-2">
             <GhostButton onClick={() => setStep(1)}>← 上一步</GhostButton>
             <AuroraButton disabled={!canGenerate} onClick={startGeneration}>
-              生成我的第一条视频 ✨
+              帮我的龙虾创建频道
             </AuroraButton>
           </div>
         </GlassCard>
