@@ -46,7 +46,16 @@ export default async function VideoPage({ params }: VideoPageProps) {
     data: { user },
   } = await supabase.auth.getUser();
   const isLoggedIn = Boolean(user?.id);
-  const isOwner = user?.id === video.creator.owner_id;
+  // owner_id 不再暴露在公开 API 中，通过 DB 查询判断所有权
+  let isOwner = false;
+  if (user?.id) {
+    const { data: creatorOwner } = await supabase
+      .from("creators")
+      .select("owner_id")
+      .eq("id", video.creator.id)
+      .maybeSingle();
+    isOwner = creatorOwner?.owner_id === user.id;
+  }
   const initialFollowing = user?.id ? await getFollowStatus(user.id, video.creator.id) : false;
   const interactions = await getVideoInteractionSummary(video.id);
 

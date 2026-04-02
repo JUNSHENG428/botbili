@@ -233,7 +233,7 @@ export async function getPublishedVideos(
     const { data, error } = await supabase
       .from("videos")
       .select(
-        "id, creator_id, title, description, tags, raw_video_url, thumbnail_url, transcript, summary, language, cloudflare_video_id, cloudflare_playback_url, duration_seconds, view_count, like_count, status, moderation_result, source, created_at, updated_at, creator:creators!videos_creator_id_fkey(id, owner_id, name, avatar_url, niche, followers_count)",
+        "id, creator_id, title, description, tags, raw_video_url, thumbnail_url, transcript, summary, language, cloudflare_video_id, cloudflare_playback_url, duration_seconds, view_count, like_count, status, moderation_result, source, created_at, updated_at, creator:creators!videos_creator_id_fkey(id, name, avatar_url, niche, followers_count)",
       )
       .eq("status", "published")
       .order(orderColumn, { ascending: false })
@@ -248,7 +248,7 @@ export async function getPublishedVideos(
       ...item,
         creator: {
           id: item.creator.id,
-          owner_id: item.creator.owner_id,
+          // owner_id intentionally excluded from public API
           name: item.creator.name,
           avatar_url: item.creator.avatar_url,
           niche: item.creator.niche,
@@ -259,7 +259,7 @@ export async function getPublishedVideos(
     const { data, error } = await supabase
       .from("videos")
       .select(
-        "id, creator_id, title, description, tags, raw_video_url, thumbnail_url, summary, language, cloudflare_video_id, cloudflare_playback_url, duration_seconds, view_count, like_count, status, moderation_result, source, created_at, updated_at, creator:creators!videos_creator_id_fkey(id, owner_id, name, avatar_url, niche, followers_count)",
+        "id, creator_id, title, description, tags, raw_video_url, thumbnail_url, summary, language, cloudflare_video_id, cloudflare_playback_url, duration_seconds, view_count, like_count, status, moderation_result, source, created_at, updated_at, creator:creators!videos_creator_id_fkey(id, name, avatar_url, niche, followers_count)",
       )
       .eq("status", "published")
       .order(orderColumn, { ascending: false })
@@ -274,7 +274,7 @@ export async function getPublishedVideos(
       ...item,
         creator: {
           id: item.creator.id,
-          owner_id: item.creator.owner_id,
+          // owner_id intentionally excluded from public API
           name: item.creator.name,
           avatar_url: item.creator.avatar_url,
           niche: item.creator.niche,
@@ -295,7 +295,7 @@ export async function getVideoById(videoId: string): Promise<VideoWithCreator | 
   const { data: rawVideo, error: videoError } = await supabase
     .from("videos")
     .select(
-      "*, creator:creators!videos_creator_id_fkey(id, owner_id, name, avatar_url, niche, followers_count)",
+      "*, creator:creators!videos_creator_id_fkey(id, name, avatar_url, niche, followers_count)",
     )
     .eq("id", videoId)
     .eq("status", "published")
@@ -319,7 +319,7 @@ export async function getVideoById(videoId: string): Promise<VideoWithCreator | 
     view_count: rawVideo.view_count + 1,
     creator: {
       id: rawVideo.creator.id,
-      owner_id: rawVideo.creator.owner_id,
+      // owner_id intentionally excluded from public API
       name: rawVideo.creator.name,
       avatar_url: rawVideo.creator.avatar_url,
       niche: rawVideo.creator.niche,

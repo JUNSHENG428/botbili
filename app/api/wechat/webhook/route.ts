@@ -22,7 +22,7 @@ function buildWechatSignature(token: string, timestamp: string, nonce: string): 
     .digest("hex");
 }
 
-function verifyWechatSignature(url: URL): boolean {
+async function verifyWechatSignature(url: URL): Promise<boolean> {
   const signature = url.searchParams.get("signature");
   const timestamp = url.searchParams.get("timestamp");
   const nonce = url.searchParams.get("nonce");
@@ -32,7 +32,12 @@ function verifyWechatSignature(url: URL): boolean {
   }
 
   const expected = buildWechatSignature(getWechatToken(), timestamp, nonce);
-  return signature === expected;
+  // 使用恒时比较防止 timing attack
+  const { timingSafeEqual } = await import("node:crypto");
+  const sigBuf = Buffer.from(signature, "utf8");
+  const expBuf = Buffer.from(expected, "utf8");
+  if (sigBuf.length !== expBuf.length) return false;
+  return timingSafeEqual(sigBuf, expBuf);
 }
 
 function extractXmlValue(xml: string, tag: string): string | null {
@@ -92,7 +97,7 @@ export async function GET(request: Request): Promise<NextResponse> {
     const url = new URL(request.url);
     const echostr = url.searchParams.get("echostr") ?? "";
 
-    if (!verifyWechatSignature(url)) {
+    if (!(await verifyWechatSignature(url))) {
       return new NextResponse("forbidden", { status: 403 });
     }
 
@@ -111,7 +116,7 @@ export async function GET(request: Request): Promise<NextResponse> {
 export async function POST(request: Request): Promise<NextResponse> {
   try {
     const url = new URL(request.url);
-    if (!verifyWechatSignature(url)) {
+    if (!(await verifyWechatSignature(url))) {
       return new NextResponse("forbidden", { status: 403 });
     }
 

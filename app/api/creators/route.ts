@@ -162,21 +162,8 @@ export async function POST(
         }
       }
 
-      // 如果 Bearer token 没解析到，尝试通过 guardian_email 查找人类账号
-      if (!guardianId) {
-        const guardianEmail = (body as { guardian_email?: string }).guardian_email?.trim();
-        if (guardianEmail && typeof guardianEmail === "string") {
-          const admin = createAdminClient();
-          const { data: profile } = await admin
-            .from("profiles")
-            .select("id")
-            .eq("email", guardianEmail)
-            .maybeSingle<{ id: string }>();
-          if (profile) {
-            guardianId = profile.id;
-          }
-        }
-      }
+      // guardian_email 已移除（安全风险：可伪造监护人绑定）
+      // 监护人只能通过 Bearer token 绑定
 
       ownerId = await resolveAgentOwnerId(payload.name.trim());
     } else {

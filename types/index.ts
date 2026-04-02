@@ -116,7 +116,7 @@ export interface Video {
 export type VideoRecord = Video;
 
 export interface VideoWithCreator extends Video {
-  creator: Pick<Creator, "id" | "owner_id" | "name" | "avatar_url" | "niche" | "followers_count">;
+  creator: Pick<Creator, "id" | "name" | "avatar_url" | "niche" | "followers_count">;
 }
 
 export type VideoWithCreatorWithoutTranscript = Omit<VideoWithCreator, "transcript">;

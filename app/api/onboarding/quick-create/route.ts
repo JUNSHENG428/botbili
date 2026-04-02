@@ -96,6 +96,35 @@ export async function POST(
     if (!user?.id) {
       return NextResponse.json({ error: "请先登录" }, { status: 401 });
     }
+
+    /* ── 邀请码校验：必须已使用过邀请码 ── */
+    const { data: inviteUsage } = await supabase
+      .from("invite_code_usage")
+      .select("id")
+      .eq("user_id", user.id)
+      .limit(1)
+      .maybeSingle();
+
+    if (!inviteUsage) {
+      return NextResponse.json(
+        { error: "需要邀请码。请先在 /invite 页面输入邀请码。" },
+        { status: 403 },
+      );
+    }
+
+    /* ── 频道数量限制 ── */
+    const { count: channelCount } = await supabase
+      .from("creators")
+      .select("id", { count: "exact", head: true })
+      .eq("owner_id", user.id)
+      .eq("is_active", true);
+    if ((channelCount ?? 0) >= 3) {
+      return NextResponse.json(
+        { error: "每个用户最多创建 3 个频道" },
+        { status: 429 },
+      );
+    }
+
     const ownerId = user.id;
 
     const slug = slugifyCreatorName(trimmedName, undefined) || randomUUID().slice(0, 8);

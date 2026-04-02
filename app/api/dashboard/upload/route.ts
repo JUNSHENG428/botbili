@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 import { moderateText } from "@/lib/moderation";
 import { checkAndIncrementQuota } from "@/lib/quota";
-import { getSupabaseAdminClient } from "@/lib/supabase/server";
+import { createClientForServer, getSupabaseAdminClient } from "@/lib/supabase/server";
 import { isHttpUrl } from "@/lib/utils";
 
 interface UploadBody {
@@ -30,12 +30,19 @@ const ERROR_MAP: Record<string, string> = {
 
 /**
  * POST /api/dashboard/upload
- * 网页版上传：通过 creator_id 识别频道，无需 Bearer token（MVP 简化）。
+ * 网页版上传：必须登录 + 验证频道所有权。
  */
 export async function POST(
   request: Request,
 ): Promise<NextResponse<UploadResult | { error: string; code?: string }>> {
   try {
+    // ── 登录验证 ──
+    const authClient = await createClientForServer();
+    const { data: { user }, error: authError } = await authClient.auth.getUser();
+    if (authError || !user) {
+      return NextResponse.json({ error: "未登录" }, { status: 401 });
+    }
+
     let body: unknown;
     try {
       body = await request.json();
@@ -61,15 +68,20 @@ export async function POST(
 
     const supabase = getSupabaseAdminClient();
 
-    /* 验证 creator 存在 */
+    /* 验证 creator 存在 + 所有权 */
     const { data: creator } = await supabase
       .from("creators")
-      .select("id, is_active")
+      .select("id, is_active, owner_id")
       .eq("id", creator_id.trim())
-      .maybeSingle<{ id: string; is_active: boolean }>();
+      .maybeSingle<{ id: string; is_active: boolean; owner_id: string }>();
 
     if (!creator) {
       return NextResponse.json({ error: ERROR_MAP.CREATOR_NOT_FOUND, code: "CREATOR_NOT_FOUND" }, { status: 404 });
+    }
+
+    /* 所有权校验 */
+    if (creator.owner_id !== user.id) {
+      return NextResponse.json({ error: "无权操作此频道" }, { status: 403 });
     }
 
     /* 配额检查 */
