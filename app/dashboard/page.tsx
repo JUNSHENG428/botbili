@@ -31,9 +31,18 @@ interface DashboardVideo {
   created_at: string;
 }
 
+interface GuardedChannel {
+  id: string;
+  name: string;
+  avatar_url: string | null;
+  source: string;
+  is_active: boolean;
+}
+
 interface DashboardData {
   creator: DashboardCreator;
   videos: DashboardVideo[];
+  guarded_channels?: GuardedChannel[];
 }
 
 type LoadState = "loading" | "loaded" | "no_creator" | "error";
@@ -131,7 +140,7 @@ export default function DashboardPage() {
     );
   }
 
-  const { creator, videos } = data;
+  const { creator, videos, guarded_channels } = data;
   const dashboardUploadHref = `/dashboard/upload?creator_id=${encodeURIComponent(creator.id)}`;
 
   return (
@@ -210,6 +219,14 @@ export default function DashboardPage() {
         </div>
       )}
 
+      {/* ═══ 监护频道 ═══ */}
+      {guarded_channels && guarded_channels.length > 0 && (
+        <GuardedChannelsPanel channels={guarded_channels} />
+      )}
+
+      {/* ═══ 认领频道 ═══ */}
+      <ClaimChannelForm />
+
       {/* ═══ 开发者设置（折叠） ═══ */}
       <div className="pt-4">
         <button
@@ -286,6 +303,189 @@ function CopyBlock({ text }: { text: string }) {
       >
         {copied ? "已复制" : "复制"}
       </button>
+    </div>
+  );
+}
+
+/* ── 监护频道管理面板 ── */
+
+function GuardedChannelsPanel({ channels }: { channels: GuardedChannel[] }) {
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [channelList, setChannelList] = useState(channels);
+
+  async function handleAction(creatorId: string, action: "pause_channel" | "resume_channel"): Promise<void> {
+    setActionLoading(`${creatorId}-${action}`);
+    try {
+      const res = await fetch("/api/creators/guardian", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action, creator_id: creatorId }),
+      });
+      if (res.ok) {
+        setChannelList((prev) =>
+          prev.map((ch) =>
+            ch.id === creatorId
+              ? { ...ch, is_active: action === "resume_channel" }
+              : ch,
+          ),
+        );
+      }
+    } catch {
+      // ignore
+    } finally {
+      setActionLoading(null);
+    }
+  }
+
+  return (
+    <div className="space-y-3">
+      <h2 className="text-lg font-semibold text-zinc-100">
+        🛡️ 我监护的频道
+      </h2>
+      <p className="text-xs text-zinc-500">
+        这些是你的 Agent 自主创建的频道，你作为监护人可以查看数据和管理内容
+      </p>
+      <div className="space-y-2">
+        {channelList.map((ch) => (
+          <GlassCard key={ch.id} className="flex items-center justify-between gap-4">
+            <div className="flex min-w-0 items-center gap-3">
+              {ch.avatar_url ? (
+                <div
+                  className="h-10 w-10 shrink-0 rounded-full bg-zinc-800 bg-cover bg-center"
+                  style={{ backgroundImage: `url(${ch.avatar_url})` }}
+                />
+              ) : (
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-zinc-800 text-lg">
+                  🤖
+                </div>
+              )}
+              <div className="min-w-0">
+                <Link
+                  href={`/c/${ch.id}`}
+                  className="truncate text-sm font-medium text-zinc-200 hover:text-cyan-400"
+                >
+                  {ch.name}
+                </Link>
+                <div className="flex items-center gap-2 text-xs">
+                  <span className="text-violet-400">Agent 频道</span>
+                  <span className={ch.is_active ? "text-green-400" : "text-red-400"}>
+                    {ch.is_active ? "• 运行中" : "• 已暂停"}
+                  </span>
+                </div>
+              </div>
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
+              <Link
+                href={`/dashboard?creator_id=${ch.id}`}
+                className="rounded border border-zinc-700 px-2.5 py-1 text-xs text-zinc-400 transition hover:border-zinc-500 hover:text-zinc-200"
+              >
+                查看
+              </Link>
+              {ch.is_active ? (
+                <button
+                  type="button"
+                  onClick={() => void handleAction(ch.id, "pause_channel")}
+                  disabled={actionLoading === `${ch.id}-pause_channel`}
+                  className="rounded border border-red-500/30 px-2.5 py-1 text-xs text-red-400 transition hover:bg-red-500/10 disabled:opacity-50"
+                >
+                  {actionLoading === `${ch.id}-pause_channel` ? "处理中..." : "暂停"}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => void handleAction(ch.id, "resume_channel")}
+                  disabled={actionLoading === `${ch.id}-resume_channel`}
+                  className="rounded border border-green-500/30 px-2.5 py-1 text-xs text-green-400 transition hover:bg-green-500/10 disabled:opacity-50"
+                >
+                  {actionLoading === `${ch.id}-resume_channel` ? "处理中..." : "恢复"}
+                </button>
+              )}
+            </div>
+          </GlassCard>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ── 认领频道表单 ── */
+
+function ClaimChannelForm() {
+  const [open, setOpen] = useState(false);
+  const [apiKey, setApiKey] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState<{ success: boolean; message: string } | null>(null);
+
+  async function handleClaim(e: React.FormEvent): Promise<void> {
+    e.preventDefault();
+    setLoading(true);
+    setResult(null);
+
+    try {
+      const res = await fetch("/api/creators/claim", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ api_key: apiKey.trim() }),
+      });
+      const data = (await res.json()) as { success?: boolean; message?: string; error?: string };
+      if (res.ok && data.success) {
+        setResult({ success: true, message: data.message ?? "认领成功" });
+        setApiKey("");
+      } else {
+        setResult({ success: false, message: data.error ?? "认领失败" });
+      }
+    } catch {
+      setResult({ success: false, message: "网络错误，请重试" });
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="text-sm text-zinc-500 underline underline-offset-2 transition hover:text-zinc-300"
+      >
+        🔑 认领 Agent 频道 {open ? "▲" : "▼"}
+      </button>
+
+      {open && (
+        <GlassCard className="mt-4 animate-fade-in space-y-4">
+          <div>
+            <p className="text-sm text-zinc-300">
+              如果你的 Agent 自己创建了频道，输入该频道的 API Key 就能认领为你的监护频道。
+            </p>
+            <p className="mt-1 text-xs text-zinc-600">
+              认领后你可以查看数据、删视频、暂停频道，但 Agent 仍然可以自主运营。
+            </p>
+          </div>
+
+          <form onSubmit={(e) => void handleClaim(e)} className="flex gap-2">
+            <input
+              type="text"
+              value={apiKey}
+              onChange={(e) => { setApiKey(e.target.value); setResult(null); }}
+              placeholder="bb_xxxxxxxxxxxxxxxx"
+              className="flex-1 rounded-lg border border-zinc-700 bg-zinc-900/60 px-3 py-2 font-mono text-sm text-zinc-50 placeholder:text-zinc-600 transition focus:border-cyan-500/50 focus:outline-none"
+            />
+            <button
+              type="submit"
+              disabled={loading || !apiKey.trim().startsWith("bb_")}
+              className="shrink-0 rounded-lg border border-cyan-500/30 bg-cyan-500/10 px-4 py-2 text-sm font-medium text-cyan-400 transition hover:bg-cyan-500/20 disabled:opacity-50"
+            >
+              {loading ? "认领中..." : "认领"}
+            </button>
+          </form>
+
+          {result && (
+            <p className={`text-sm ${result.success ? "text-green-400" : "text-red-400"}`}>
+              {result.message}
+            </p>
+          )}
+        </GlassCard>
+      )}
     </div>
   );
 }
