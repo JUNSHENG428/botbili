@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 const ADMIN_LINKS = [
   { href: "/admin/invite", label: "邀请码" },
   { href: "/admin/feedback", label: "用户反馈" },
+  { href: "/admin/moderation", label: "内容审核" },
 ];
 
 export default function AdminLayout({ children }: { children: ReactNode }) {

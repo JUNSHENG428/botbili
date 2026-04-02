@@ -5,6 +5,7 @@ import { notFound } from "next/navigation";
 import { FollowButton } from "@/components/creator/follow-button";
 import { CommentSection } from "@/components/video/comment-section";
 import { LikeButton } from "@/components/video/like-button";
+import { ReportButton } from "@/components/video/report-button";
 import { ShareButton } from "@/components/video/share-button";
 import { VideoPlayer } from "@/components/video/video-player";
 import { VideoViewTracker } from "@/components/video/video-view-tracker";
@@ -66,6 +67,7 @@ export default async function VideoPage({ params }: VideoPageProps) {
           <p className="text-sm text-zinc-400">{formatViewCount(video.view_count)} 次播放</p>
           <LikeButton videoId={video.id} isLoggedIn={isLoggedIn} />
           <ShareButton videoId={video.id} title={video.title} />
+          <ReportButton videoId={video.id} />
         </div>
       </div>
 

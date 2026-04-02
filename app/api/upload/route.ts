@@ -4,7 +4,7 @@ import { withRateLimitHeaders } from "@/lib/api-response";
 import { extractBearerToken, hashApiKey, verifyApiKey } from "@/lib/auth";
 import { createCitations } from "@/lib/citations";
 import { uploadVideoByUrl } from "@/lib/cloudflare";
-import { moderateText } from "@/lib/moderation";
+import { logModerationResult, moderateImage, moderateText } from "@/lib/moderation";
 import { checkAndIncrementQuota, consumeHourlyUploadLimit, HOURLY_LIMIT } from "@/lib/quota";
 import { getUploadByIdempotencyKey, setUploadByIdempotencyKey } from "@/lib/upload-idempotency";
 import {
@@ -255,6 +255,51 @@ export async function POST(request: NextRequest): Promise<NextResponse<ApiError 
       });
     }
 
+    // 审核 transcript
+    if (uploadPayload.transcript) {
+      const transcriptResult = await moderateText(uploadPayload.transcript);
+      if (transcriptResult.flagged) {
+        const reason =
+          transcriptResult.categories.length > 0
+            ? `Transcript rejected: ${transcriptResult.categories.join(", ")}`
+            : "Transcript rejected by moderation";
+        return errorResponse(reason, "MODERATION_REJECTED", 422, {
+          remaining: hourlyLimit.remaining,
+          resetAtUnix: hourlyLimit.resetAtUnix,
+        });
+      }
+    }
+
+    // 审核 summary
+    if (uploadPayload.summary) {
+      const summaryResult = await moderateText(uploadPayload.summary);
+      if (summaryResult.flagged) {
+        const reason =
+          summaryResult.categories.length > 0
+            ? `Summary rejected: ${summaryResult.categories.join(", ")}`
+            : "Summary rejected by moderation";
+        return errorResponse(reason, "MODERATION_REJECTED", 422, {
+          remaining: hourlyLimit.remaining,
+          resetAtUnix: hourlyLimit.resetAtUnix,
+        });
+      }
+    }
+
+    // 审核 thumbnail（图像审核，在视频创建之前）
+    if (uploadPayload.thumbnail_url) {
+      const thumbnailResult = await moderateImage(uploadPayload.thumbnail_url);
+      if (thumbnailResult.flagged) {
+        const reason =
+          thumbnailResult.categories.length > 0
+            ? `Thumbnail rejected: ${thumbnailResult.categories.join(", ")}`
+            : "Thumbnail rejected by moderation";
+        return errorResponse(reason, "MODERATION_REJECTED", 422, {
+          remaining: hourlyLimit.remaining,
+          resetAtUnix: hourlyLimit.resetAtUnix,
+        });
+      }
+    }
+
     const cloudflareResult = await uploadVideoByUrl(uploadPayload.video_url);
     const createdVideo = await createVideo(
       creator.id,
@@ -262,6 +307,38 @@ export async function POST(request: NextRequest): Promise<NextResponse<ApiError 
       cloudflareResult.uid,
       cloudflareResult.playbackUrl,
     );
+
+    // 异步记录所有审核结果到 moderation_logs（不阻塞主流程）
+    {
+      const loggingPromises: Promise<void>[] = [];
+      loggingPromises.push(
+        moderateText(`${uploadPayload.title}\n${uploadPayload.description ?? ""}`)
+          .then((r) => logModerationResult(createdVideo.id, "title_description", r))
+          .catch((e) => console.error("moderation log failed:", e)),
+      );
+      if (uploadPayload.transcript) {
+        loggingPromises.push(
+          moderateText(uploadPayload.transcript)
+            .then((r) => logModerationResult(createdVideo.id, "transcript", r))
+            .catch((e) => console.error("moderation log failed:", e)),
+        );
+      }
+      if (uploadPayload.summary) {
+        loggingPromises.push(
+          moderateText(uploadPayload.summary)
+            .then((r) => logModerationResult(createdVideo.id, "summary", r))
+            .catch((e) => console.error("moderation log failed:", e)),
+        );
+      }
+      if (uploadPayload.thumbnail_url) {
+        loggingPromises.push(
+          moderateImage(uploadPayload.thumbnail_url)
+            .then((r) => logModerationResult(createdVideo.id, "thumbnail", r))
+            .catch((e) => console.error("moderation log failed:", e)),
+        );
+      }
+      Promise.all(loggingPromises).catch(() => {});
+    }
 
     // 处理引用链（V2.0）
     if (uploadPayload.cites && uploadPayload.cites.length > 0) {

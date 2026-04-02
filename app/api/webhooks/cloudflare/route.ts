@@ -3,9 +3,10 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
 
 import { apiErrorResponse, withRateLimitHeaders } from "@/lib/api-response";
+import { logModerationResult, moderateImage } from "@/lib/moderation";
+import { getSupabaseAdminClient } from "@/lib/supabase/server";
 import { updateVideoStatus } from "@/lib/upload-repository";
 import { dispatchWebhooks } from "@/lib/webhooks/dispatch";
-import { getSupabaseAdminClient } from "@/lib/supabase/server";
 import type { ApiError } from "@/types";
 
 interface CloudflareWebhookPayload {
@@ -67,22 +68,56 @@ export async function POST(request: Request): Promise<NextResponse<ApiError | { 
 
     const state = payload.status?.state;
     if (payload.readyToStream && state === "ready") {
-      await updateVideoStatus(uid, "published", {
+      // 如果 Cloudflare 自动生成了缩略图，先对其进行图像审核
+      let finalStatus: "published" | "rejected" = "published";
+
+      if (payload.thumbnail) {
+        let thumbnailModerationResult;
+        try {
+          thumbnailModerationResult = await moderateImage(payload.thumbnail);
+        } catch (err) {
+          console.error("Cloudflare thumbnail moderation failed:", err);
+        }
+
+        if (thumbnailModerationResult?.flagged) {
+          finalStatus = "rejected";
+        }
+
+        // 获取视频 id 以便记录日志
+        if (thumbnailModerationResult) {
+          const supabaseForLog = getSupabaseAdminClient();
+          const { data: videoForLog } = await supabaseForLog
+            .from("videos")
+            .select("id")
+            .eq("cloudflare_video_id", uid)
+            .maybeSingle<{ id: string }>();
+
+          if (videoForLog) {
+            logModerationResult(videoForLog.id, "cloudflare_thumbnail", thumbnailModerationResult).catch(
+              (err) => console.error("logModerationResult failed:", err),
+            );
+          }
+        }
+      }
+
+      await updateVideoStatus(uid, finalStatus, {
         durationSeconds: payload.duration ? Math.round(payload.duration) : null,
         thumbnailUrl: payload.thumbnail ?? undefined,
       });
 
-      const supabase = getSupabaseAdminClient();
-      const { data: video } = await supabase
-        .from("videos")
-        .select("id, creator_id")
-        .eq("cloudflare_video_id", uid)
-        .maybeSingle<{ id: string; creator_id: string }>();
+      if (finalStatus === "published") {
+        const supabase = getSupabaseAdminClient();
+        const { data: video } = await supabase
+          .from("videos")
+          .select("id, creator_id")
+          .eq("cloudflare_video_id", uid)
+          .maybeSingle<{ id: string; creator_id: string }>();
 
-      if (video) {
-        dispatchWebhooks(video.id, video.creator_id).catch((err) => {
-          console.error("dispatchWebhooks failed:", err);
-        });
+        if (video) {
+          dispatchWebhooks(video.id, video.creator_id).catch((err) => {
+            console.error("dispatchWebhooks failed:", err);
+          });
+        }
       }
     } else if (state === "error") {
       await updateVideoStatus(uid, "failed");
