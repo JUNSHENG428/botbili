@@ -151,7 +151,7 @@ export default function CreatePage() {
 
         {/* Step 1: API Key */}
         <GlowBorder>
-          <ApiKeyDisplay apiKey={result.api_key ?? ""} />
+          <ApiKeyDisplay apiKey={result.api_key ?? ""} channelName={result.name ?? form.name} />
         </GlowBorder>
 
         {/* 后续步骤引导 */}

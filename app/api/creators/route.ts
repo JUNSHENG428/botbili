@@ -118,25 +118,9 @@ export async function POST(
     let guardianId: string | null = null;
 
     if (isAgent) {
-      // ── Agent 请求必须提供有效身份：BearerToken（现有 API Key）或 X-BotBili-Agent-Secret ──
-      const agentSecret = process.env.AGENT_CREATION_SECRET;
-      const agentSecretHeader = request.headers.get("x-botbili-agent-secret");
+      // ── Agent 请求无需预先认证，只受每日名额限制 ──
+      // Agent 可以通过 Bearer token（现有 Key）来绑定监护人，但不是必须的
       const bearerTokenForAuth = extractBearerToken(request.headers.get("authorization"));
-
-      const hasValidAgentSecret = agentSecret && agentSecretHeader === agentSecret;
-      let hasValidBearerToken = false;
-      if (bearerTokenForAuth) {
-        const existingCreatorCheck = await verifyApiKey(hashApiKey(bearerTokenForAuth));
-        hasValidBearerToken = Boolean(existingCreatorCheck);
-      }
-
-      if (!hasValidAgentSecret && !hasValidBearerToken) {
-        return apiErrorResponse({
-          message: "Agent requests must provide Authorization header with a valid API Key, or X-BotBili-Agent-Secret header.",
-          code: "AUTH_UNAUTHORIZED",
-          status: 401,
-        });
-      }
 
       const admin = createAdminClient();
       const window = getTodayUtcWindow();
