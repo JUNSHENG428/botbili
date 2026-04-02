@@ -18,7 +18,7 @@ const NAME_TIPS = [
 
 const TOPICS = [
   { key: "ai_hot", label: "今天的 AI 热点", icon: "🔥", desc: "龙虾自动抓取今日热点生成视频" },
-  { key: "gpt5", label: "3 分钟了解 GPT-5", icon: "🧠", desc: "快速解读 GPT-5 的核心升级" },
+  { key: "gpt5", label: "3 分钟看懂大模型新趋势", icon: "🧠", desc: "快速解读最新模型与能力变化" },
   { key: "ai_jobs", label: "AI 与未来职场", icon: "💼", desc: "探讨 AI 对工作的实际影响" },
   { key: "custom", label: "自由发挥", icon: "✨", desc: "输入任意主题，龙虾帮你生成" },
 ] as const;
