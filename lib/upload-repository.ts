@@ -1,4 +1,7 @@
+import { randomUUID } from "node:crypto";
+
 import { getSupabaseAdminClient } from "@/lib/supabase/server";
+import { slugifyCreatorName } from "@/lib/agent-card";
 import type {
   CreateCreatorRequest,
   Creator,
@@ -187,6 +190,7 @@ export async function createCreator(
   apiKeyHash: string,
   source: "agent" | "human" = "human",
   guardianId?: string | null,
+  slug?: string,
 ): Promise<Creator> {
   const supabase = getSupabaseAdminClient();
   const { data, error } = await supabase
@@ -201,6 +205,7 @@ export async function createCreator(
       agent_key_hash: apiKeyHash,
       source,
       guardian_id: guardianId ?? null,
+      slug: slug ?? (slugifyCreatorName(payload.name.trim(), undefined) || randomUUID().slice(0, 8)),
     })
     .select("*")
     .single<Creator>();

@@ -134,20 +134,20 @@ export async function resolveCreatorByIdOrSlug(identifier: string): Promise<Reso
     }
   }
 
-  // Slug-based lookup: fetch all active creators and match by slug
-  const { data: creators, error } = await supabase
+  // Slug-based lookup: direct DB query on slug column
+  const normalizedIdentifier = trimmed.toLowerCase();
+  const { data: slugMatch, error } = await supabase
     .from("creators")
     .select("*")
+    .eq("slug", normalizedIdentifier)
     .eq("is_active", true)
-    .returns<CreatorLookupRow[]>();
+    .maybeSingle<CreatorLookupRow>();
 
   if (error) {
     throw new Error(`resolveCreatorByIdOrSlug failed: ${error.message}`);
   }
 
-  const normalizedIdentifier = trimmed.toLowerCase();
-  const match = (creators ?? []).find((creator) => getCreatorSlug(creator) === normalizedIdentifier);
-  return match ? toResolvedCreator(match) : null;
+  return slugMatch ? toResolvedCreator(slugMatch) : null;
 }
 
 async function getPublishedVideoMetrics(creatorId: string): Promise<CreatorVideoMetricRow[]> {

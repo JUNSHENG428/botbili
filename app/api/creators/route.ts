@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 
 import { apiErrorResponse, withRateLimitHeaders } from "@/lib/api-response";
 import { extractBearerToken, generateApiKey, hashApiKey, verifyApiKey } from "@/lib/auth";
+import { slugifyCreatorName } from "@/lib/agent-card";
 import { isAgentRequest } from "@/lib/request-utils";
 import { createAdminClient, createClientForServer } from "@/lib/supabase/server";
 import { createCreator } from "@/lib/upload-repository";
@@ -242,6 +243,7 @@ export async function POST(
     }
 
     const keyPair = generateApiKey();
+    const slug = slugifyCreatorName(payload.name.trim()) || randomUUID().slice(0, 8);
     const creator = await createCreator(
       ownerId,
       {
@@ -254,9 +256,10 @@ export async function POST(
       keyPair.hash,
       isAgent ? "agent" : "human",
       guardianId,
+      slug,
     );
 
-    const channelUrl = `/c/${creator.id}`;
+    const channelUrl = `/c/${creator.slug ?? creator.id}`;
 
     return withRateLimitHeaders(
       NextResponse.json(

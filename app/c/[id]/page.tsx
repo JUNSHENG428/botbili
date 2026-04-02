@@ -35,7 +35,7 @@ export default async function CreatorPage({ params }: CreatorPageProps) {
     data: { user },
   } = await supabase.auth.getUser();
   const isLoggedIn = Boolean(user?.id);
-  const isOwner = user?.id === creator.owner_id;
+  const isOwner = user?.id === creator.owner_id || user?.id === creator.guardian_id;
   const initialFollowing = user?.id ? await getFollowStatus(user.id, creator.id) : false;
 
   const videoItems: VideoCardData[] = videos.map((video) => ({

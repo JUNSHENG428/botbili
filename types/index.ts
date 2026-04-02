@@ -39,6 +39,7 @@ export interface Creator {
   id: string;
   owner_id: string;
   name: string;
+  slug: string;
   avatar_url: string | null;
   bio: string;
   niche: string;

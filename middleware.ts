@@ -46,7 +46,15 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
   }
 
   if (user && pathname === "/login") {
-    return NextResponse.redirect(new URL("/feed", request.url));
+    // Smart redirect: if user has a creator, go to dashboard; otherwise go to feed
+    const { data: existingCreator } = await supabase
+      .from("creators")
+      .select("id")
+      .eq("owner_id", user.id)
+      .limit(1)
+      .maybeSingle();
+    const redirectPath = existingCreator ? "/dashboard" : "/feed";
+    return NextResponse.redirect(new URL(redirectPath, request.url));
   }
 
   const needsAuth = AUTH_ROUTES.some((r) => pathname.startsWith(r));

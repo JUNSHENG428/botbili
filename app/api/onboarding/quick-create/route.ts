@@ -3,9 +3,9 @@ import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 
 import { generateApiKey } from "@/lib/auth";
-import { getCreatorSlug } from "@/lib/agent-card";
+import { getCreatorSlug, slugifyCreatorName } from "@/lib/agent-card";
 import { createCreator } from "@/lib/upload-repository";
-import { getSupabaseAdminClient } from "@/lib/supabase/server";
+import { createClientForServer, getSupabaseAdminClient } from "@/lib/supabase/server";
 
 const VALID_TOPICS = ["ai_hot", "gpt5", "ai_jobs", "custom"] as const;
 type Topic = (typeof VALID_TOPICS)[number];
@@ -90,12 +90,20 @@ export async function POST(
     const niche = TOPIC_TO_NICHE[validTopic];
     const bio = `${trimmedName} · AI 视频频道`;
     const keyPair = generateApiKey();
-    const ownerId = randomUUID();
+
+    const userSupabase = await createClientForServer();
+    const { data: { user } } = await userSupabase.auth.getUser();
+    const ownerId = user?.id ?? randomUUID(); // fallback for unauthenticated (legacy)
+
+    const slug = slugifyCreatorName(trimmedName, undefined) || randomUUID().slice(0, 8);
 
     const creator = await createCreator(
       ownerId,
       { name: trimmedName, niche, bio },
       keyPair.hash,
+      "human",
+      null,
+      slug,
     );
 
     /* ── 匹配预制视频并复制到新频道 ── */
@@ -191,7 +199,7 @@ export async function POST(
         creator_id: creator.id,
         creator_name: trimmedName,
         first_video: firstVideo,
-        channel_url: `/c/${getCreatorSlug({ id: creator.id, name: trimmedName })}`,
+        channel_url: `/c/${creator.slug ?? getCreatorSlug({ id: creator.id, name: trimmedName })}`,
       },
       { status: 201 },
     );

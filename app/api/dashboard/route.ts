@@ -11,6 +11,8 @@ interface DashboardCreator {
   followers_count: number;
   agent_key_hash: string;
   is_active: boolean;
+  owner_id: string;
+  guardian_id: string | null;
 }
 
 interface DashboardVideo {
@@ -95,12 +97,21 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
 
     const { data: creator, error: creatorErr } = await supabase
       .from("creators")
-      .select("id, name, bio, niche, avatar_url, followers_count, agent_key_hash, is_active")
+      .select("id, name, bio, niche, avatar_url, followers_count, agent_key_hash, is_active, owner_id, guardian_id")
       .eq("id", creatorId)
       .maybeSingle<DashboardCreator>();
 
     if (creatorErr || !creator) {
       return NextResponse.json({ error: "频道不存在" }, { status: 404 });
+    }
+
+    // When a specific creator_id was requested, verify current user is owner or guardian
+    if (requestedCreatorId) {
+      const authSupabase = await createClientForServer();
+      const { data: { user: authUser } } = await authSupabase.auth.getUser();
+      if (!authUser?.id || (creator.owner_id !== authUser.id && creator.guardian_id !== authUser.id)) {
+        return NextResponse.json({ error: "无权访问此频道" }, { status: 403 });
+      }
     }
 
     const { data: videos, error: videosErr } = await supabase

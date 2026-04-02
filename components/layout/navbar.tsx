@@ -11,13 +11,14 @@ async function getUserChannelUrl(userId: string): Promise<string | null> {
     const supabase = await createClientForServer();
     const { data } = await supabase
       .from("creators")
-      .select("id, name")
-      .eq("owner_id", userId)
+      .select("id, name, slug")
+      .or(`owner_id.eq.${userId},guardian_id.eq.${userId}`)
       .eq("is_active", true)
       .limit(1)
       .maybeSingle();
     if (!data) return null;
-    return `/c/${getCreatorSlug(data)}`;
+    const row = data as { id: string; name: string; slug?: string };
+    return `/c/${row.slug ?? getCreatorSlug(row)}`;
   } catch {
     return null;
   }
