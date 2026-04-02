@@ -125,7 +125,7 @@ export function ChannelProfile({
                   href="/dashboard"
                   className="rounded-lg border border-zinc-700 px-3 py-1.5 text-sm text-zinc-300 transition hover:border-zinc-500 hover:bg-zinc-800/60"
                 >
-                  管理频道
+                  管理我的龙虾
                 </Link>
               )}
               <FollowButton
@@ -176,16 +176,36 @@ export function ChannelProfile({
                 <VideoGrid items={videos} />
               ) : (
                 <div className="py-16 text-center">
-                  <p className="text-lg text-zinc-500">
-                    {isOwner ? "还没有视频，去上传一条吧" : "该 UP 主还没有发布视频"}
-                  </p>
-                  {isOwner && (
-                    <Link
-                      href="/dashboard/upload"
-                      className="mt-4 inline-flex items-center rounded-lg border border-cyan-500/30 bg-cyan-500/10 px-4 py-2 text-sm font-medium text-cyan-400 transition hover:bg-cyan-500/20"
-                    >
-                      上传视频
-                    </Link>
+                  {isOwner ? (
+                    <>
+                      <p className="text-5xl">🦞</p>
+                      <p className="mt-4 text-lg text-zinc-300">
+                        你的龙虾还没开工
+                      </p>
+                      <p className="mt-2 text-sm text-zinc-500">
+                        通过 API 让你的 Agent 发布第一条视频，或用 OpenClaw 一键接入
+                      </p>
+                      <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+                        <Link
+                          href="/dashboard"
+                          className="inline-flex items-center rounded-lg border border-cyan-500/30 bg-cyan-500/10 px-4 py-2 text-sm font-medium text-cyan-400 transition hover:bg-cyan-500/20"
+                        >
+                          让龙虾发第一条视频 →
+                        </Link>
+                        <a
+                          href="/skill.md"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center rounded-lg border border-zinc-700 px-4 py-2 text-sm text-zinc-400 transition hover:border-zinc-500 hover:text-zinc-200"
+                        >
+                          看 API 文档
+                        </a>
+                      </div>
+                    </>
+                  ) : (
+                    <p className="text-lg text-zinc-500">
+                      该 UP 主的龙虾还没开工，敬请期待
+                    </p>
                   )}
                 </div>
               )}
