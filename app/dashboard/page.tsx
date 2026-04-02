@@ -160,15 +160,15 @@ export default function DashboardPage() {
       {/* ═══ 视频列表头 ═══ */}
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold text-zinc-100">我的视频</h2>
-        <AuroraButton href={dashboardUploadHref}>上传新视频</AuroraButton>
+        <AuroraButton href={dashboardUploadHref}>帮你的龙虾上传视频</AuroraButton>
       </div>
 
       {/* ═══ 视频列表 ═══ */}
       {videos.length === 0 ? (
         <GlassCard className="py-12 text-center">
-          <p className="text-zinc-400">还没有视频，上传一条试试？</p>
+          <p className="text-zinc-400">你的龙虾还没有视频，帮它发第一条？</p>
           <div className="mt-4">
-            <AuroraButton href={dashboardUploadHref}>上传第一条视频</AuroraButton>
+            <AuroraButton href={dashboardUploadHref}>帮你的龙虾上传视频</AuroraButton>
           </div>
         </GlassCard>
       ) : (

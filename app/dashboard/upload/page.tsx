@@ -162,7 +162,7 @@ export default function UploadPage() {
       </Link>
 
       <GlassCard className="space-y-5">
-        <h1 className="text-xl font-bold text-zinc-50">上传新视频</h1>
+        <h1 className="text-xl font-bold text-zinc-50">帮你的龙虾上传视频</h1>
 
         {/* 标题 */}
         <FieldWrapper label="视频标题" required>
@@ -233,7 +233,7 @@ export default function UploadPage() {
             onClick={handleSubmit}
             className="w-full"
           >
-            {submitState === "submitting" ? "发布中…" : "发布视频"}
+            {submitState === "submitting" ? "上传中…" : "帮你的龙虾上传视频"}
           </AuroraButton>
         </div>
       </GlassCard>
