@@ -1,12 +1,18 @@
 "use client";
 
-import { startTransition, type KeyboardEvent, type MouseEvent } from "react";
-import { useRouter } from "next/navigation";
+import type { MouseEvent } from "react";
+import Link from "next/link";
 
 import { GlassCard } from "@/components/design/glass-card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatRelativeTime } from "@/lib/format";
+import {
+  getAuthorEmoji,
+  getDifficultyClassName,
+  getDifficultyLabel,
+  getRecipePlatforms,
+} from "@/lib/recipe-utils";
 import { cn } from "@/lib/utils";
 import type { Recipe } from "@/types/recipe";
 
@@ -32,38 +38,6 @@ function getRecipeHref(recipe: Recipe): string {
   return `/recipes/${recipe.slug || recipe.id}`;
 }
 
-function getRecipePlatforms(recipe: Recipe): string[] {
-  const nextPlatforms = Array.isArray(recipe.platforms) ? recipe.platforms : [];
-  const legacyPlatforms = Array.isArray(recipe.platform) ? recipe.platform : [];
-  const merged = nextPlatforms.length > 0 ? nextPlatforms : legacyPlatforms;
-
-  return merged.filter(Boolean);
-}
-
-function getDifficultyLabel(difficulty: Recipe["difficulty"]): string {
-  const labels: Record<Recipe["difficulty"], string> = {
-    beginner: "Beginner",
-    intermediate: "Intermediate",
-    advanced: "Advanced",
-  };
-
-  return labels[difficulty] ?? difficulty;
-}
-
-function getDifficultyClassName(difficulty: Recipe["difficulty"]): string {
-  const classNames: Record<Recipe["difficulty"], string> = {
-    beginner: "border-emerald-500/20 bg-emerald-500/10 text-emerald-300",
-    intermediate: "border-cyan-500/20 bg-cyan-500/10 text-cyan-300",
-    advanced: "border-violet-500/20 bg-violet-500/10 text-violet-300",
-  };
-
-  return classNames[difficulty] ?? "border-zinc-700 bg-zinc-800/70 text-zinc-300";
-}
-
-function getAuthorEmoji(authorType: Recipe["author_type"]): string {
-  return authorType === "ai_agent" ? "🤖" : "👤";
-}
-
 function buildDescription(recipe: Recipe): string {
   if (recipe.description?.trim()) {
     return recipe.description.trim();
@@ -87,7 +61,6 @@ export function RecipeCard({
   onStarToggle,
   className,
 }: RecipeCardProps) {
-  const router = useRouter();
   const href = getRecipeHref(recipe);
   const platforms = getRecipePlatforms(recipe);
   const visiblePlatforms = platforms.slice(0, 3);
@@ -99,33 +72,18 @@ export function RecipeCard({
   const forkedFromLabel = recipe.forked_from ? recipe.forked_from.slice(0, 8) : null;
   const canToggleStar = typeof onStarToggle === "function";
 
-  function navigateToRecipe() {
-    startTransition(() => {
-      router.push(href);
-    });
-  }
-
-  function handleCardKeyDown(event: KeyboardEvent<HTMLDivElement>) {
-    if (event.key === "Enter" || event.key === " ") {
-      event.preventDefault();
-      navigateToRecipe();
-    }
-  }
-
   function handleStarClick(event: MouseEvent<HTMLButtonElement>) {
+    event.preventDefault();
     event.stopPropagation();
     onStarToggle?.(recipe.id, !isStarred);
   }
 
   return (
-    <div
-      role="link"
-      tabIndex={0}
+    <Link
+      href={href}
       aria-label={`查看 Recipe：${recipe.title}`}
-      onClick={navigateToRecipe}
-      onKeyDown={handleCardKeyDown}
       className={cn(
-        "group cursor-pointer rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-950",
+        "group block rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-950",
         className,
       )}
     >
@@ -221,6 +179,6 @@ export function RecipeCard({
           </Button>
         </div>
       </GlassCard>
-    </div>
+    </Link>
   );
 }

@@ -2,78 +2,55 @@
 
 import { useState } from "react";
 
-import { AuroraButton } from "@/components/design/aurora-button";
-import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
 
 interface RecipePublishButtonProps {
   recipeId: string;
   currentStatus: string;
-  onPublished: () => void;
+  onPublished?: () => void;
 }
 
-interface ApiResponse<T> {
-  success: boolean;
-  data?: T;
-  error?: {
-    code: string;
-    message: string;
-  };
-}
-
-export function RecipePublishButton({
-  recipeId,
-  currentStatus,
-  onPublished,
-}: RecipePublishButtonProps) {
+export function RecipePublishButton({ recipeId, currentStatus, onPublished }: RecipePublishButtonProps) {
   const { toast } = useToast();
-  const [publishing, setPublishing] = useState(false);
-
-  async function handlePublish() {
-    setPublishing(true);
-
-    try {
-      const response = await fetch(`/api/recipes/${recipeId}`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          status: "published",
-          visibility: "public",
-        }),
-      });
-
-      const payload = (await response.json()) as ApiResponse<{ recipe: { id: string } }>;
-
-      if (!response.ok || !payload.success) {
-        throw new Error(payload.error?.message ?? "发布 Recipe 失败");
-      }
-
-      toast("Recipe 已发布，现在社区可以发现它了 🎉", { variant: "success" });
-      onPublished();
-    } catch (error) {
-      toast(error instanceof Error ? error.message : "发布 Recipe 失败", { variant: "error" });
-    } finally {
-      setPublishing(false);
-    }
-  }
+  const [loading, setLoading] = useState(false);
 
   if (currentStatus === "published") {
     return (
-      <Badge variant="outline" className="border-emerald-500/30 bg-emerald-500/10 text-emerald-300">
-        已发布
-      </Badge>
+      <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-center text-sm text-emerald-300">
+        ✓ 已发布
+      </div>
     );
   }
 
-  if (currentStatus !== "draft") {
-    return null;
+  async function handlePublish() {
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/recipes/${recipeId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "published", visibility: "public" }),
+      });
+      const payload = await res.json();
+      if (!res.ok || !payload.success) throw new Error(payload.error?.message ?? "发布失败");
+      toast("Recipe 已发布到广场", { variant: "success" });
+      onPublished?.();
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "发布失败", { variant: "error" });
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
-    <AuroraButton className="w-full justify-center" disabled={publishing} onClick={() => void handlePublish()}>
-      {publishing ? "发布中…" : "发布 Recipe"}
-    </AuroraButton>
+    <Button
+      type="button"
+      variant="outline"
+      className="w-full border-cyan-500/30 bg-cyan-500/10 text-cyan-200 hover:border-cyan-400/40"
+      onClick={handlePublish}
+      disabled={loading}
+    >
+      {loading ? "发布中…" : "发布到广场"}
+    </Button>
   );
 }

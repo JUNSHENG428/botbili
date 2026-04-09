@@ -69,12 +69,6 @@ interface PendingExecutionState {
   commandPreview: string;
 }
 
-function getRecipePlatforms(recipe: Recipe): string[] {
-  const nextPlatforms = Array.isArray(recipe.platforms) ? recipe.platforms : [];
-  const legacyPlatforms = Array.isArray(recipe.platform) ? recipe.platform : [];
-  return nextPlatforms.length > 0 ? nextPlatforms : legacyPlatforms;
-}
-
 function renderReadmeBlocks(value: Record<string, unknown> | string | null) {
   if (!value) {
     return [];
@@ -228,6 +222,7 @@ export default function RecipeDetailPage({ params }: RecipeDetailPageProps) {
     async function loadRecipe() {
       setLoading(true);
       setError(null);
+      setForkSource(null);
 
       try {
         const response = await fetch(`/api/recipes/${id}`);
@@ -244,20 +239,25 @@ export default function RecipeDetailPage({ params }: RecipeDetailPageProps) {
         setRecipeData(payload.data);
 
         if (payload.data.recipe.forked_from) {
-          const sourceResponse = await fetch(`/api/recipes/${payload.data.recipe.forked_from}`);
-          const sourcePayload = (await sourceResponse.json()) as ApiResponse<RecipeDetailPayload>;
+          void fetch(`/api/recipes/${payload.data.recipe.forked_from}`)
+            .then(async (sourceResponse) => {
+              const sourcePayload = (await sourceResponse.json()) as ApiResponse<RecipeDetailPayload>;
 
-          if (active && sourceResponse.ok && sourcePayload.success && sourcePayload.data) {
-            setForkSource({
-              id: sourcePayload.data.recipe.id,
-              slug: sourcePayload.data.recipe.slug,
-              author: sourcePayload.data.recipe.author,
+              if (!active || !sourceResponse.ok || !sourcePayload.success || !sourcePayload.data) {
+                return;
+              }
+
+              setForkSource({
+                id: sourcePayload.data.recipe.id,
+                slug: sourcePayload.data.recipe.slug,
+                author: sourcePayload.data.recipe.author,
+              });
+            })
+            .catch(() => {
+              if (active) {
+                setForkSource(null);
+              }
             });
-          } else if (active) {
-            setForkSource(null);
-          }
-        } else if (active) {
-          setForkSource(null);
         }
       } catch (fetchError) {
         if (!active) {
@@ -460,7 +460,7 @@ export default function RecipeDetailPage({ params }: RecipeDetailPageProps) {
 
           <RecipeReadmeSection recipe={fallbackReadmeRecipe} />
 
-          <RecipeStoryboard scriptTemplate={recipe.script_template} />
+          <RecipeStoryboard scriptTemplate={recipe.script_template} isAuthor={isAuthor} />
 
           <RecipeExecutionHistory executions={recentExecutions} />
 

@@ -1,8 +1,7 @@
 "use client";
 
-import { Search } from "lucide-react";
+import { ChevronDown, Search } from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
@@ -80,50 +79,65 @@ export function RecipeFilters({
         />
       </div>
 
-      <div className="grid gap-3 md:grid-cols-3">
-        <label className="space-y-2 text-sm">
-          <span className="text-zinc-400">排序</span>
-          <select
-            value={sort}
-            onChange={(event) => onSortChange(event.target.value)}
-            className="h-10 w-full rounded-lg border border-zinc-800 bg-zinc-950/80 px-3 text-sm text-zinc-100 outline-none transition focus:border-cyan-500/40"
-          >
-            {SORT_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
+      <div className="space-y-2">
+        <p className="text-sm text-zinc-400">排序</p>
+        <div className="flex flex-wrap gap-2">
+          {SORT_OPTIONS.map((option) => {
+            const active = sort === option.value;
+            return (
+              <button
+                key={option.value}
+                type="button"
+                onClick={() => onSortChange(option.value)}
+                className={cn(
+                  "rounded-full border px-3 py-1.5 text-sm transition",
+                  active
+                    ? "border-cyan-500/40 bg-cyan-500/10 text-cyan-200"
+                    : "border-zinc-800 bg-zinc-950/70 text-zinc-400 hover:border-zinc-700 hover:text-zinc-200",
+                )}
+              >
                 {option.label}
-              </option>
-            ))}
-          </select>
-        </label>
+              </button>
+            );
+          })}
+        </div>
+      </div>
 
+      <div className="grid gap-3 md:grid-cols-2">
         <label className="space-y-2 text-sm">
           <span className="text-zinc-400">分类</span>
-          <select
-            value={category}
-            onChange={(event) => onCategoryChange(event.target.value)}
-            className="h-10 w-full rounded-lg border border-zinc-800 bg-zinc-950/80 px-3 text-sm text-zinc-100 outline-none transition focus:border-cyan-500/40"
-          >
-            {CATEGORY_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
+          <div className="relative">
+            <select
+              value={category}
+              onChange={(event) => onCategoryChange(event.target.value)}
+              className="h-10 w-full appearance-none rounded-xl border border-zinc-800 bg-zinc-950/80 px-3 pr-10 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-cyan-500/40"
+            >
+              {CATEGORY_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+            <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
+          </div>
         </label>
 
         <label className="space-y-2 text-sm">
           <span className="text-zinc-400">难度</span>
-          <select
-            value={difficulty}
-            onChange={(event) => onDifficultyChange(event.target.value)}
-            className="h-10 w-full rounded-lg border border-zinc-800 bg-zinc-950/80 px-3 text-sm text-zinc-100 outline-none transition focus:border-cyan-500/40"
-          >
-            {DIFFICULTY_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
+          <div className="relative">
+            <select
+              value={difficulty}
+              onChange={(event) => onDifficultyChange(event.target.value)}
+              className="h-10 w-full appearance-none rounded-xl border border-zinc-800 bg-zinc-950/80 px-3 pr-10 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-cyan-500/40"
+            >
+              {DIFFICULTY_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+            <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
+          </div>
         </label>
       </div>
 
@@ -149,16 +163,6 @@ export function RecipeFilters({
             );
           })}
         </div>
-
-        {platforms.length > 0 ? (
-          <div className="flex flex-wrap gap-2 pt-1">
-            {platforms.map((platform) => (
-              <Badge key={platform} variant="outline" className="border-zinc-700 bg-zinc-950/70 text-zinc-300">
-                {PLATFORM_OPTIONS.find((option) => option.value === platform)?.label ?? platform}
-              </Badge>
-            ))}
-          </div>
-        ) : null}
       </div>
     </div>
   );

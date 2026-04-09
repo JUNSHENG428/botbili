@@ -63,6 +63,12 @@
   }
 }
 
+@layer utilities {
+  .pb-safe {
+    padding-bottom: calc(0.75rem + env(safe-area-inset-bottom));
+  }
+}
+
 /* 无障碍：尊重用户动效偏好 */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {

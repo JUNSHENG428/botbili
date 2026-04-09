@@ -3,6 +3,12 @@ import type { ReactNode } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { formatRelativeTime } from "@/lib/format";
+import {
+  getAuthorEmoji,
+  getDifficultyClassName,
+  getDifficultyLabel,
+  getRecipePlatforms,
+} from "@/lib/recipe-utils";
 import { cn } from "@/lib/utils";
 import type { Recipe } from "@/types/recipe";
 
@@ -25,32 +31,6 @@ interface RecipeHeaderProps {
   recipe: Recipe & { author?: RecipeAuthor };
   forkSource?: ForkSourceSummary | null;
   actions?: ReactNode;
-}
-
-function getDifficultyClassName(difficulty: Recipe["difficulty"]): string {
-  const classNames: Record<Recipe["difficulty"], string> = {
-    beginner: "border-emerald-500/20 bg-emerald-500/10 text-emerald-300",
-    intermediate: "border-cyan-500/20 bg-cyan-500/10 text-cyan-300",
-    advanced: "border-violet-500/20 bg-violet-500/10 text-violet-300",
-  };
-
-  return classNames[difficulty] ?? "border-zinc-700 bg-zinc-800/70 text-zinc-300";
-}
-
-function getDifficultyLabel(difficulty: Recipe["difficulty"]): string {
-  const labels: Record<Recipe["difficulty"], string> = {
-    beginner: "Beginner",
-    intermediate: "Intermediate",
-    advanced: "Advanced",
-  };
-
-  return labels[difficulty] ?? difficulty;
-}
-
-function getRecipePlatforms(recipe: Recipe): string[] {
-  const nextPlatforms = Array.isArray(recipe.platforms) ? recipe.platforms : [];
-  const legacyPlatforms = Array.isArray(recipe.platform) ? recipe.platform : [];
-  return nextPlatforms.length > 0 ? nextPlatforms : legacyPlatforms;
 }
 
 export function RecipeHeader({ recipe, forkSource, actions }: RecipeHeaderProps) {
@@ -100,7 +80,7 @@ export function RecipeHeader({ recipe, forkSource, actions }: RecipeHeaderProps)
             // eslint-disable-next-line @next/next/no-img-element
             <img src={author.avatar_url} alt={authorLabel} className="h-full w-full object-cover" />
           ) : (
-            <span>{author?.author_type === "ai_agent" ? "🤖" : "👤"}</span>
+            <span>{getAuthorEmoji(author?.author_type ?? recipe.author_type)}</span>
           )}
         </div>
 
@@ -108,7 +88,7 @@ export function RecipeHeader({ recipe, forkSource, actions }: RecipeHeaderProps)
           <div className="flex flex-wrap items-center gap-2 text-sm text-zinc-300">
             <span className="truncate font-medium">{authorLabel}</span>
             <span title={author?.author_type === "ai_agent" ? "AI Agent 作者" : "人类作者"}>
-              {author?.author_type === "ai_agent" ? "🤖" : "👤"}
+              {getAuthorEmoji(author?.author_type ?? recipe.author_type)}
             </span>
             <span className="text-zinc-600">·</span>
             <span className="text-zinc-500">{recipe.created_at ? formatRelativeTime(recipe.created_at) : "刚刚发布"}</span>

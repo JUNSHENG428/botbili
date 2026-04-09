@@ -242,7 +242,7 @@ export async function GET(request: Request): Promise<NextResponse> {
       query = query.eq("difficulty", difficulty);
     }
 
-    const { data, error } = await query;
+    const { data, error } = await query.limit(500);
 
     if (error) {
       throw new Error(`加载 Recipe 列表失败: ${error.message}`);

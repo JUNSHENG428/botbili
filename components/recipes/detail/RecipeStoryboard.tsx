@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import { GlassCard } from "@/components/design/glass-card";
 
 interface StoryStep {
@@ -8,6 +10,7 @@ interface StoryStep {
 
 interface RecipeStoryboardProps {
   scriptTemplate: Record<string, unknown> | null;
+  isAuthor?: boolean;
 }
 
 function toStepTitle(step: Record<string, unknown>, index: number): string {
@@ -65,7 +68,7 @@ function normalizeSteps(scriptTemplate: Record<string, unknown> | null): StorySt
   });
 }
 
-export function RecipeStoryboard({ scriptTemplate }: RecipeStoryboardProps) {
+export function RecipeStoryboard({ scriptTemplate, isAuthor = false }: RecipeStoryboardProps) {
   const steps = normalizeSteps(scriptTemplate);
 
   if (steps.length === 0) {
@@ -75,9 +78,20 @@ export function RecipeStoryboard({ scriptTemplate }: RecipeStoryboardProps) {
           <h2 className="text-xl font-semibold text-zinc-100">Storyboard</h2>
           <p className="text-sm text-zinc-500">这份 Recipe 还没有拆出可视化步骤卡片。</p>
         </div>
-        <p className="text-sm leading-7 text-zinc-400">
-          下一步可以把脚本模板整理成镜头顺序、素材来源、字幕节奏和矩阵变量，让 Fork 的人一眼看懂怎么跑。
-        </p>
+        {isAuthor ? (
+          <div className="space-y-3">
+            <p className="text-sm leading-7 text-zinc-400">
+              下一步可以把脚本模板整理成镜头顺序、素材来源、字幕节奏和矩阵变量，让 Fork 的人一眼看懂怎么跑。
+            </p>
+            <Link href="/recipes/new?edit=true" className="text-sm text-cyan-300 transition hover:text-cyan-200">
+              去完善 Storyboard
+            </Link>
+          </div>
+        ) : (
+          <p className="text-sm leading-7 text-zinc-400">
+            作者还没有整理分镜步骤，执行后可以在执行历史里看到实际输出。
+          </p>
+        )}
       </GlassCard>
     );
   }

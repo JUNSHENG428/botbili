@@ -75,6 +75,11 @@ type ListRecipesOptions = {
   platform?: string;
 };
 
+/**
+ * @deprecated 直接使用 app/api/recipes/route.ts 里的 GET handler 逻辑。
+ * 此函数保留仅供 server-side 内部调用（如 sitemap.ts），
+ * 勿在新代码中引用。
+ */
 export async function listRecipes(
   options: ListRecipesOptions,
 ): Promise<{ recipes: RecipeWithAuthor[]; total: number }> {
@@ -102,22 +107,40 @@ export async function listRecipes(
   if (difficulty) query = query.eq('difficulty', difficulty);
   if (platform) query = query.contains('platform', [platform]);
 
-  if (sort !== 'trending') {
-    query = query
-      .order(orderCol, { ascending: orderAsc })
-      .range((page - 1) * pageSize, page * pageSize - 1);
+  if (sort === 'trending') {
+    let trendingQuery = admin.from('recipes').select('*').eq('status', 'published');
+    if (tag) trendingQuery = trendingQuery.contains('tags', [tag]);
+    if (difficulty) trendingQuery = trendingQuery.eq('difficulty', difficulty);
+    if (platform) trendingQuery = trendingQuery.contains('platform', [platform]);
+    const { data: allData, error: allError } = await trendingQuery;
+    if (allError) throw new Error(`listRecipes trending failed: ${allError.message}`);
+    const sorted = ((allData ?? []) as Recipe[])
+      .sort((a, b) => calculateRecipeTrendingScore(b) - calculateRecipeTrendingScore(a));
+    const total = sorted.length;
+    const paged = sorted.slice((page - 1) * pageSize, page * pageSize);
+    const authorIds = [...new Set(paged.map(r => r.author_id))];
+    const profileMap = await fetchProfiles(authorIds);
+    return {
+      recipes: paged.map((r) => ({
+        ...r,
+        author: {
+          id: r.author_id,
+          display_name: profileMap.get(r.author_id)?.display_name ?? null,
+          avatar_url: profileMap.get(r.author_id)?.avatar_url ?? null,
+        },
+      })),
+      total,
+    };
   }
+
+  query = query
+    .order(orderCol, { ascending: orderAsc })
+    .range((page - 1) * pageSize, page * pageSize - 1);
 
   const { data, error, count } = await query;
   if (error) throw new Error(`listRecipes failed: ${error.message}`);
 
-  let recipes = (data ?? []) as Recipe[];
-
-  if (sort === 'trending') {
-    recipes = recipes
-      .sort((left, right) => calculateRecipeTrendingScore(right) - calculateRecipeTrendingScore(left))
-      .slice((page - 1) * pageSize, page * pageSize);
-  }
+  const recipes = (data ?? []) as Recipe[];
 
   const authorIds = [...new Set(recipes.map((r) => r.author_id))];
   const profileMap = await fetchProfiles(authorIds);
@@ -265,15 +288,18 @@ const UPDATABLE_FIELDS: (keyof Recipe)[] = [
   'title',
   'description',
   'readme_md',
+  'readme_json',
   'tags',
   'difficulty',
   'platform',
+  'platforms',
   'cover_url',
   'script_template',
   'storyboard',
   'matrix_config',
   'tools_required',
   'status',
+  'visibility',
   'slug',
 ];
 
