@@ -1,30 +1,107 @@
 import { NextResponse } from "next/server";
 
-import { apiErrorResponse } from "@/lib/api-response";
-import { forkRecipe } from "@/lib/recipes";
-import { createClientForServer } from "@/lib/supabase/server";
+import { verifyCsrfOrigin } from "@/lib/csrf";
+import { createClientForServer, getSupabaseAdminClient } from "@/lib/supabase/server";
 import type { Recipe } from "@/types/recipe";
 
 interface RouteContext {
   params: Promise<{ id: string }>;
 }
 
-interface ForkRecipeResponse {
-  data: Recipe;
+function successResponse<T>(data: T, status = 200): NextResponse {
+  return NextResponse.json({ success: true, data }, { status });
+}
+
+function errorResponse(message: string, code: string, status: number): NextResponse {
+  return NextResponse.json(
+    {
+      success: false,
+      error: {
+        code,
+        message,
+      },
+    },
+    { status },
+  );
+}
+
+function slugifyTitle(title: string): string {
+  const normalized = title
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9\u4e00-\u9fa5]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+
+  return normalized || "recipe";
+}
+
+async function buildUniqueSlug(title: string): Promise<string> {
+  const admin = getSupabaseAdminClient();
+  const base = slugifyTitle(title);
+
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    const suffix = Math.random().toString(36).slice(2, 6);
+    const slug = `${base}-${suffix}`;
+    const { data, error } = await admin
+      .from("recipes")
+      .select("id")
+      .eq("slug", slug)
+      .maybeSingle();
+
+    if (error) {
+      throw new Error(`检查 slug 冲突失败: ${error.message}`);
+    }
+
+    if (!data) {
+      return slug;
+    }
+  }
+
+  throw new Error("生成 fork slug 失败");
+}
+
+async function resolveRecipe(identifier: string): Promise<Recipe | null> {
+  const admin = getSupabaseAdminClient();
+  const { data: byId, error: byIdError } = await admin
+    .from("recipes")
+    .select("*")
+    .eq("id", identifier)
+    .maybeSingle();
+
+  if (byIdError) {
+    throw new Error(`按 id 查询 Recipe 失败: ${byIdError.message}`);
+  }
+
+  if (byId) {
+    return byId as Recipe;
+  }
+
+  const { data: bySlug, error: bySlugError } = await admin
+    .from("recipes")
+    .select("*")
+    .eq("slug", identifier)
+    .maybeSingle();
+
+  if (bySlugError) {
+    throw new Error(`按 slug 查询 Recipe 失败: ${bySlugError.message}`);
+  }
+
+  return (bySlug as Recipe | null) ?? null;
 }
 
 /**
- * POST /api/recipes/[id]/fork
- * Requires authentication. Creates a fork of the recipe.
+ * curl -X POST "http://localhost:3000/api/recipes/RECIPE_ID/fork" \
+ *   -H "Origin: http://localhost:3000"
  */
-export async function POST(
-  _request: Request,
-  context: RouteContext,
-): Promise<NextResponse> {
+export async function POST(request: Request, context: RouteContext): Promise<NextResponse> {
+  if (!verifyCsrfOrigin(request)) {
+    return errorResponse("请求来源校验失败", "CSRF_INVALID", 403);
+  }
+
   try {
     const { id } = await context.params;
     if (!id) {
-      return apiErrorResponse({ message: "Invalid recipe id", code: "VALIDATION_RECIPE_ID_INVALID", status: 400 });
+      return errorResponse("Recipe 标识不能为空", "INVALID_RECIPE_ID", 400);
     }
 
     const supabase = await createClientForServer();
@@ -34,14 +111,68 @@ export async function POST(
     } = await supabase.auth.getUser();
 
     if (authError || !user) {
-      return apiErrorResponse({ message: "Unauthorized", code: "AUTH_UNAUTHORIZED", status: 401 });
+      return errorResponse("请先登录", "UNAUTHORIZED", 401);
     }
 
-    const forked = await forkRecipe(id, user.id);
-    const response: ForkRecipeResponse = { data: forked };
-    return NextResponse.json(response, { status: 201 });
+    const sourceRecipe = await resolveRecipe(id);
+    if (!sourceRecipe || sourceRecipe.status !== "published" || sourceRecipe.visibility === "private") {
+      return errorResponse("Recipe 不存在", "RECIPE_NOT_FOUND", 404);
+    }
+
+    const forkTitle = `${sourceRecipe.title} (Fork)`;
+    const forkSlug = await buildUniqueSlug(forkTitle);
+    const admin = getSupabaseAdminClient();
+    const authorType = request.headers.get("x-botbili-client") === "agent" ? "ai_agent" : "human";
+    const platforms =
+      Array.isArray(sourceRecipe.platforms) && sourceRecipe.platforms.length > 0
+        ? sourceRecipe.platforms
+        : sourceRecipe.platform;
+
+    const { data: forkedRecipe, error: forkError } = await admin
+      .from("recipes")
+      .insert({
+        author_id: user.id,
+        author_type: authorType,
+        title: forkTitle,
+        slug: forkSlug,
+        description: sourceRecipe.description,
+        readme_md: sourceRecipe.readme_md,
+        readme_json: sourceRecipe.readme_json,
+        tags: sourceRecipe.tags,
+        difficulty: sourceRecipe.difficulty,
+        platform: platforms,
+        platforms,
+        language: sourceRecipe.language,
+        cover_url: sourceRecipe.cover_url,
+        script_template: sourceRecipe.script_template,
+        storyboard: sourceRecipe.storyboard,
+        matrix_config: sourceRecipe.matrix_config,
+        tools_required: sourceRecipe.tools_required,
+        forked_from: sourceRecipe.id,
+        status: "draft",
+        visibility: "private",
+        category: sourceRecipe.category,
+      })
+      .select("*")
+      .single();
+
+    if (forkError) {
+      throw new Error(`创建 Fork 失败: ${forkError.message}`);
+    }
+
+    const { error: relationError } = await admin.from("recipe_forks").insert({
+      original_recipe_id: sourceRecipe.id,
+      forked_recipe_id: forkedRecipe.id,
+      user_id: user.id,
+    });
+
+    if (relationError) {
+      throw new Error(`写入 Fork 关系失败: ${relationError.message}`);
+    }
+
+    return successResponse({ recipe: forkedRecipe as Recipe }, 201);
   } catch (error: unknown) {
     console.error("POST /api/recipes/[id]/fork failed:", error);
-    return apiErrorResponse({ message: "Internal server error", code: "INTERNAL_ERROR", status: 500 });
+    return errorResponse("Fork Recipe 失败", "INTERNAL_ERROR", 500);
   }
 }

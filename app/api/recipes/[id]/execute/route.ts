@@ -1,31 +1,75 @@
 import { NextResponse } from "next/server";
 
-import { apiErrorResponse } from "@/lib/api-response";
-import { createExecution } from "@/lib/recipes";
-import { createClientForServer } from "@/lib/supabase/server";
-import type { RecipeExecution } from "@/types/recipe";
+import { verifyCsrfOrigin } from "@/lib/csrf";
+import { runRecipeMock } from "@/lib/executions/runRecipeMock";
+import { createClientForServer, getSupabaseAdminClient } from "@/lib/supabase/server";
+import type { Recipe } from "@/types/recipe";
 
 interface RouteContext {
   params: Promise<{ id: string }>;
 }
 
-interface CreateExecutionResponse {
-  data: RecipeExecution;
+function successResponse<T>(data: T, status = 200): NextResponse {
+  return NextResponse.json({ success: true, data }, { status });
+}
+
+function errorResponse(message: string, code: string, status: number): NextResponse {
+  return NextResponse.json(
+    {
+      success: false,
+      error: {
+        code,
+        message,
+      },
+    },
+    { status },
+  );
+}
+
+async function resolveRecipe(identifier: string): Promise<Recipe | null> {
+  const admin = getSupabaseAdminClient();
+  const { data: byId, error: byIdError } = await admin
+    .from("recipes")
+    .select("*")
+    .eq("id", identifier)
+    .maybeSingle();
+
+  if (byIdError) {
+    throw new Error(`按 id 查询 Recipe 失败: ${byIdError.message}`);
+  }
+
+  if (byId) {
+    return byId as Recipe;
+  }
+
+  const { data: bySlug, error: bySlugError } = await admin
+    .from("recipes")
+    .select("*")
+    .eq("slug", identifier)
+    .maybeSingle();
+
+  if (bySlugError) {
+    throw new Error(`按 slug 查询 Recipe 失败: ${bySlugError.message}`);
+  }
+
+  return (bySlug as Recipe | null) ?? null;
 }
 
 /**
- * POST /api/recipes/[id]/execute
- * Requires authentication.
- * Body: { input_overrides? }
+ * curl -X POST "http://localhost:3000/api/recipes/RECIPE_ID/execute" \
+ *   -H "Content-Type: application/json" \
+ *   -H "Origin: http://localhost:3000" \
+ *   -d '{}'
  */
-export async function POST(
-  request: Request,
-  context: RouteContext,
-): Promise<NextResponse> {
+export async function POST(request: Request, context: RouteContext): Promise<NextResponse> {
+  if (!verifyCsrfOrigin(request)) {
+    return errorResponse("请求来源校验失败", "CSRF_INVALID", 403);
+  }
+
   try {
     const { id } = await context.params;
     if (!id) {
-      return apiErrorResponse({ message: "Invalid recipe id", code: "VALIDATION_RECIPE_ID_INVALID", status: 400 });
+      return errorResponse("Recipe 标识不能为空", "INVALID_RECIPE_ID", 400);
     }
 
     const supabase = await createClientForServer();
@@ -35,26 +79,70 @@ export async function POST(
     } = await supabase.auth.getUser();
 
     if (authError || !user) {
-      return apiErrorResponse({ message: "Unauthorized", code: "AUTH_UNAUTHORIZED", status: 401 });
+      return errorResponse("请先登录", "UNAUTHORIZED", 401);
     }
 
-    let body: Record<string, unknown> = {};
+    const recipe = await resolveRecipe(id);
+    if (!recipe || recipe.status !== "published") {
+      return errorResponse("Recipe 不存在或尚未发布", "RECIPE_NOT_FOUND", 404);
+    }
+
+    let body: { input_overrides?: Record<string, unknown> } = {};
     try {
       const text = await request.text();
       if (text.trim()) {
-        body = JSON.parse(text);
+        body = JSON.parse(text) as { input_overrides?: Record<string, unknown> };
       }
     } catch {
-      return apiErrorResponse({ message: "Invalid request body", code: "VALIDATION_INVALID_BODY", status: 400 });
+      return errorResponse("请求体不是合法 JSON", "INVALID_JSON", 400);
     }
 
-    const inputOverrides = body.input_overrides as Record<string, unknown> | undefined;
+    if (
+      body.input_overrides !== undefined &&
+      (typeof body.input_overrides !== "object" ||
+        body.input_overrides === null ||
+        Array.isArray(body.input_overrides))
+    ) {
+      return errorResponse("input_overrides 必须是对象", "INVALID_INPUT_OVERRIDES", 400);
+    }
 
-    const execution = await createExecution(id, user.id, inputOverrides);
-    const response: CreateExecutionResponse = { data: execution };
-    return NextResponse.json(response, { status: 201 });
+    const commandPreview = `openclaw run recipe:${recipe.slug}`;
+    const admin = getSupabaseAdminClient();
+    const insertPayload = {
+      recipe_id: recipe.id,
+      user_id: user.id,
+      status: "pending",
+      progress: 0,
+      progress_pct: 0,
+      input_overrides: body.input_overrides ?? null,
+      command_preview: commandPreview,
+      command_text: commandPreview,
+    };
+
+    const { data: execution, error: insertError } = await admin
+      .from("recipe_executions")
+      .insert(insertPayload)
+      .select("id, status")
+      .single();
+
+    if (insertError) {
+      throw new Error(`创建 Execution 失败: ${insertError.message}`);
+    }
+
+    void runRecipeMock(execution.id).catch((error) => {
+      console.error("runRecipeMock failed:", error);
+    });
+
+    return successResponse(
+      {
+        execution_id: execution.id,
+        command_preview: commandPreview,
+        status: "pending",
+      },
+      201,
+    );
   } catch (error: unknown) {
     console.error("POST /api/recipes/[id]/execute failed:", error);
-    return apiErrorResponse({ message: "Internal server error", code: "INTERNAL_ERROR", status: 500 });
+    return errorResponse("执行 Recipe 失败", "INTERNAL_ERROR", 500);
   }
 }

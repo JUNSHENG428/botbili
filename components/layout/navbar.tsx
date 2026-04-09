@@ -49,6 +49,9 @@ export async function Navbar() {
             <Link href="/feed" className="text-sm text-zinc-300 transition hover:text-zinc-100">
               浏览
             </Link>
+            <Link href="/recipes" className="text-sm text-zinc-300 transition hover:text-zinc-100">
+              Recipes
+            </Link>
             <Link href="/search" className="text-sm text-zinc-300 transition hover:text-zinc-100">
               搜索
             </Link>

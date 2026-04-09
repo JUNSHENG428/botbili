@@ -225,3 +225,551 @@ CREATE TRIGGER recipes_updated_at BEFORE UPDATE ON public.recipes
 
 CREATE TRIGGER recipe_comments_updated_at BEFORE UPDATE ON public.recipe_comments
   FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+
+-- ============================================================
+-- Alignment patch: keep existing schema compatible, then补齐 Prompt 02 所需字段
+-- ============================================================
+
+-- ── recipes 字段补齐 ──
+
+ALTER TABLE public.recipes
+  ADD COLUMN IF NOT EXISTS readme_json JSONB,
+  ADD COLUMN IF NOT EXISTS visibility TEXT DEFAULT 'public',
+  ADD COLUMN IF NOT EXISTS category TEXT,
+  ADD COLUMN IF NOT EXISTS platforms TEXT[] DEFAULT '{}'::TEXT[];
+
+UPDATE public.recipes
+SET readme_json = to_jsonb(readme_md)
+WHERE readme_json IS NULL
+  AND readme_md IS NOT NULL;
+
+UPDATE public.recipes
+SET platforms = COALESCE(platform, '{}'::TEXT[])
+WHERE platforms IS NULL
+   OR cardinality(platforms) = 0;
+
+UPDATE public.recipes
+SET slug = CONCAT('recipe-', SUBSTRING(id::TEXT FROM 1 FOR 8))
+WHERE slug IS NULL OR BTRIM(slug) = '';
+
+UPDATE public.recipes
+SET status = 'archived'
+WHERE status = 'moderated';
+
+ALTER TABLE public.recipes
+  ALTER COLUMN slug SET NOT NULL,
+  ALTER COLUMN status SET DEFAULT 'draft',
+  ALTER COLUMN visibility SET DEFAULT 'public',
+  ALTER COLUMN platforms SET DEFAULT '{}'::TEXT[];
+
+DO $$
+DECLARE
+  constraint_record RECORD;
+BEGIN
+  FOR constraint_record IN
+    SELECT conname
+    FROM pg_constraint
+    WHERE conrelid = 'public.recipes'::regclass
+      AND contype = 'c'
+      AND (
+        pg_get_constraintdef(oid) ILIKE '%author_type%'
+        OR pg_get_constraintdef(oid) ILIKE '%difficulty%'
+        OR pg_get_constraintdef(oid) ILIKE '%status%'
+        OR pg_get_constraintdef(oid) ILIKE '%visibility%'
+      )
+  LOOP
+    EXECUTE FORMAT('ALTER TABLE public.recipes DROP CONSTRAINT %I', constraint_record.conname);
+  END LOOP;
+END $$;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'recipes_author_type_check'
+      AND conrelid = 'public.recipes'::regclass
+  ) THEN
+    ALTER TABLE public.recipes
+      ADD CONSTRAINT recipes_author_type_check
+      CHECK (author_type IN ('human', 'ai_agent'));
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'recipes_status_check'
+      AND conrelid = 'public.recipes'::regclass
+  ) THEN
+    ALTER TABLE public.recipes
+      ADD CONSTRAINT recipes_status_check
+      CHECK (status IN ('draft', 'published', 'archived'));
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'recipes_visibility_check'
+      AND conrelid = 'public.recipes'::regclass
+  ) THEN
+    ALTER TABLE public.recipes
+      ADD CONSTRAINT recipes_visibility_check
+      CHECK (visibility IN ('public', 'unlisted', 'private'));
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'recipes_difficulty_check'
+      AND conrelid = 'public.recipes'::regclass
+  ) THEN
+    ALTER TABLE public.recipes
+      ADD CONSTRAINT recipes_difficulty_check
+      CHECK (difficulty IN ('beginner', 'intermediate', 'advanced'));
+  END IF;
+END $$;
+
+CREATE INDEX IF NOT EXISTS idx_recipes_visibility ON public.recipes(visibility);
+CREATE INDEX IF NOT EXISTS idx_recipes_category ON public.recipes(category) WHERE category IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_recipes_platforms ON public.recipes USING GIN(platforms);
+
+-- ── recipe_stars / recipe_saves 已有唯一约束，无需结构补齐 ──
+
+-- ── recipe_forks 字段补齐 ──
+
+ALTER TABLE public.recipe_forks
+  ADD COLUMN IF NOT EXISTS original_recipe_id UUID REFERENCES public.recipes(id) ON DELETE CASCADE;
+
+UPDATE public.recipe_forks
+SET original_recipe_id = source_id
+WHERE original_recipe_id IS NULL
+  AND source_id IS NOT NULL;
+
+ALTER TABLE public.recipe_forks
+  ALTER COLUMN original_recipe_id SET NOT NULL;
+
+CREATE INDEX IF NOT EXISTS idx_recipe_forks_original_recipe ON public.recipe_forks(original_recipe_id);
+
+-- ── recipe_comments 字段/约束补齐 ──
+
+UPDATE public.recipe_comments
+SET comment_type = 'question'
+WHERE comment_type IS NULL
+   OR comment_type NOT IN ('question', 'feedback', 'optimization', 'matrix', 'bug');
+
+ALTER TABLE public.recipe_comments
+  ALTER COLUMN comment_type SET DEFAULT 'question';
+
+DO $$
+DECLARE
+  constraint_record RECORD;
+BEGIN
+  FOR constraint_record IN
+    SELECT conname
+    FROM pg_constraint
+    WHERE conrelid = 'public.recipe_comments'::regclass
+      AND contype = 'c'
+      AND pg_get_constraintdef(oid) ILIKE '%comment_type%'
+  LOOP
+    EXECUTE FORMAT('ALTER TABLE public.recipe_comments DROP CONSTRAINT %I', constraint_record.conname);
+  END LOOP;
+END $$;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'recipe_comments_comment_type_check'
+      AND conrelid = 'public.recipe_comments'::regclass
+  ) THEN
+    ALTER TABLE public.recipe_comments
+      ADD CONSTRAINT recipe_comments_comment_type_check
+      CHECK (comment_type IN ('question', 'feedback', 'optimization', 'matrix', 'bug'));
+  END IF;
+END $$;
+
+-- ── recipe_executions 字段/约束补齐 ──
+
+ALTER TABLE public.recipe_executions
+  ADD COLUMN IF NOT EXISTS progress_pct INT DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS command_text TEXT,
+  ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT now();
+
+UPDATE public.recipe_executions
+SET progress_pct = COALESCE(progress, 0)
+WHERE progress_pct IS NULL;
+
+UPDATE public.recipe_executions
+SET command_text = command_preview
+WHERE command_text IS NULL
+  AND command_preview IS NOT NULL;
+
+UPDATE public.recipe_executions
+SET status = 'failed'
+WHERE status = 'cancelled';
+
+ALTER TABLE public.recipe_executions
+  ALTER COLUMN progress_pct SET DEFAULT 0,
+  ALTER COLUMN updated_at SET DEFAULT now();
+
+DO $$
+DECLARE
+  constraint_record RECORD;
+BEGIN
+  FOR constraint_record IN
+    SELECT conname
+    FROM pg_constraint
+    WHERE conrelid = 'public.recipe_executions'::regclass
+      AND contype = 'c'
+      AND (
+        pg_get_constraintdef(oid) ILIKE '%status%'
+        OR pg_get_constraintdef(oid) ILIKE '%progress%'
+      )
+  LOOP
+    EXECUTE FORMAT('ALTER TABLE public.recipe_executions DROP CONSTRAINT %I', constraint_record.conname);
+  END LOOP;
+END $$;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'recipe_executions_status_check'
+      AND conrelid = 'public.recipe_executions'::regclass
+  ) THEN
+    ALTER TABLE public.recipe_executions
+      ADD CONSTRAINT recipe_executions_status_check
+      CHECK (status IN ('pending', 'running', 'script_done', 'edit_done', 'publishing', 'success', 'failed'));
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'recipe_executions_progress_pct_check'
+      AND conrelid = 'public.recipe_executions'::regclass
+  ) THEN
+    ALTER TABLE public.recipe_executions
+      ADD CONSTRAINT recipe_executions_progress_pct_check
+      CHECK (progress_pct BETWEEN 0 AND 100);
+  END IF;
+END $$;
+
+-- ── updated_at 触发器补齐（executions 额外补齐，便于轮询） ──
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_trigger
+    WHERE tgname = 'recipe_executions_updated_at'
+      AND tgrelid = 'public.recipe_executions'::regclass
+  ) THEN
+    CREATE TRIGGER recipe_executions_updated_at
+      BEFORE UPDATE ON public.recipe_executions
+      FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+  END IF;
+END $$;
+
+-- ── 计数器触发函数 ──
+
+CREATE OR REPLACE FUNCTION public.handle_recipe_stars_counter()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF TG_OP = 'INSERT' THEN
+    UPDATE public.recipes
+    SET star_count = star_count + 1
+    WHERE id = NEW.recipe_id;
+    RETURN NEW;
+  END IF;
+
+  UPDATE public.recipes
+  SET star_count = GREATEST(star_count - 1, 0)
+  WHERE id = OLD.recipe_id;
+  RETURN OLD;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION public.handle_recipe_saves_counter()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF TG_OP = 'INSERT' THEN
+    UPDATE public.recipes
+    SET save_count = save_count + 1
+    WHERE id = NEW.recipe_id;
+    RETURN NEW;
+  END IF;
+
+  UPDATE public.recipes
+  SET save_count = GREATEST(save_count - 1, 0)
+  WHERE id = OLD.recipe_id;
+  RETURN OLD;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION public.handle_recipe_forks_counter()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF TG_OP = 'INSERT' THEN
+    UPDATE public.recipes
+    SET fork_count = fork_count + 1
+    WHERE id = NEW.original_recipe_id;
+    RETURN NEW;
+  END IF;
+
+  UPDATE public.recipes
+  SET fork_count = GREATEST(fork_count - 1, 0)
+  WHERE id = OLD.original_recipe_id;
+  RETURN OLD;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION public.handle_recipe_comments_counter()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF TG_OP = 'INSERT' THEN
+    UPDATE public.recipes
+    SET comment_count = comment_count + 1
+    WHERE id = NEW.recipe_id;
+    RETURN NEW;
+  END IF;
+
+  UPDATE public.recipes
+  SET comment_count = GREATEST(comment_count - 1, 0)
+  WHERE id = OLD.recipe_id;
+  RETURN OLD;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION public.handle_recipe_comment_likes_counter()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF TG_OP = 'INSERT' THEN
+    UPDATE public.recipe_comments
+    SET like_count = like_count + 1
+    WHERE id = NEW.comment_id;
+    RETURN NEW;
+  END IF;
+
+  UPDATE public.recipe_comments
+  SET like_count = GREATEST(like_count - 1, 0)
+  WHERE id = OLD.comment_id;
+  RETURN OLD;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION public.handle_recipe_execution_success_counter()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF NEW.status = 'success' AND COALESCE(OLD.status, '') <> 'success' THEN
+    UPDATE public.recipes
+    SET exec_count = exec_count + 1
+    WHERE id = NEW.recipe_id;
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- ── 计数器触发器 ──
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_trigger
+    WHERE tgname = 'recipe_stars_counter_trigger'
+      AND tgrelid = 'public.recipe_stars'::regclass
+  ) THEN
+    CREATE TRIGGER recipe_stars_counter_trigger
+      AFTER INSERT OR DELETE ON public.recipe_stars
+      FOR EACH ROW EXECUTE FUNCTION public.handle_recipe_stars_counter();
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_trigger
+    WHERE tgname = 'recipe_saves_counter_trigger'
+      AND tgrelid = 'public.recipe_saves'::regclass
+  ) THEN
+    CREATE TRIGGER recipe_saves_counter_trigger
+      AFTER INSERT OR DELETE ON public.recipe_saves
+      FOR EACH ROW EXECUTE FUNCTION public.handle_recipe_saves_counter();
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_trigger
+    WHERE tgname = 'recipe_forks_counter_trigger'
+      AND tgrelid = 'public.recipe_forks'::regclass
+  ) THEN
+    CREATE TRIGGER recipe_forks_counter_trigger
+      AFTER INSERT OR DELETE ON public.recipe_forks
+      FOR EACH ROW EXECUTE FUNCTION public.handle_recipe_forks_counter();
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_trigger
+    WHERE tgname = 'recipe_comments_counter_trigger'
+      AND tgrelid = 'public.recipe_comments'::regclass
+  ) THEN
+    CREATE TRIGGER recipe_comments_counter_trigger
+      AFTER INSERT OR DELETE ON public.recipe_comments
+      FOR EACH ROW EXECUTE FUNCTION public.handle_recipe_comments_counter();
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_trigger
+    WHERE tgname = 'recipe_comment_likes_counter_trigger'
+      AND tgrelid = 'public.recipe_comment_likes'::regclass
+  ) THEN
+    CREATE TRIGGER recipe_comment_likes_counter_trigger
+      AFTER INSERT OR DELETE ON public.recipe_comment_likes
+      FOR EACH ROW EXECUTE FUNCTION public.handle_recipe_comment_likes_counter();
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_trigger
+    WHERE tgname = 'recipe_execution_success_counter_trigger'
+      AND tgrelid = 'public.recipe_executions'::regclass
+  ) THEN
+    CREATE TRIGGER recipe_execution_success_counter_trigger
+      AFTER UPDATE OF status ON public.recipe_executions
+      FOR EACH ROW EXECUTE FUNCTION public.handle_recipe_execution_success_counter();
+  END IF;
+END $$;
+
+-- ── RLS 对齐补丁 ──
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'recipes'
+      AND policyname = 'recipes_select_public_visible_restrictive'
+  ) THEN
+    EXECUTE $policy$
+      CREATE POLICY "recipes_select_public_visible_restrictive"
+      ON public.recipes
+      AS RESTRICTIVE
+      FOR SELECT
+      USING (
+        author_id = auth.uid()
+        OR (status = 'published' AND visibility = 'public')
+      )
+    $policy$;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'recipes'
+      AND policyname = 'recipes_author_all'
+  ) THEN
+    EXECUTE $policy$
+      CREATE POLICY "recipes_author_all"
+      ON public.recipes
+      FOR ALL
+      USING (author_id = auth.uid())
+      WITH CHECK (author_id = auth.uid())
+    $policy$;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'recipe_stars'
+      AND policyname = 'recipe_stars_all_own'
+  ) THEN
+    EXECUTE $policy$
+      CREATE POLICY "recipe_stars_all_own"
+      ON public.recipe_stars
+      FOR ALL
+      USING (user_id = auth.uid())
+      WITH CHECK (user_id = auth.uid())
+    $policy$;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'recipe_saves'
+      AND policyname = 'recipe_saves_all_own'
+  ) THEN
+    EXECUTE $policy$
+      CREATE POLICY "recipe_saves_all_own"
+      ON public.recipe_saves
+      FOR ALL
+      USING (user_id = auth.uid())
+      WITH CHECK (user_id = auth.uid())
+    $policy$;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'recipe_comments'
+      AND policyname = 'recipe_comments_select_public_recipes'
+  ) THEN
+    EXECUTE $policy$
+      CREATE POLICY "recipe_comments_select_public_recipes"
+      ON public.recipe_comments
+      AS RESTRICTIVE
+      FOR SELECT
+      USING (
+        EXISTS (
+          SELECT 1
+          FROM public.recipes recipe_row
+          WHERE recipe_row.id = recipe_comments.recipe_id
+            AND (
+              recipe_row.author_id = auth.uid()
+              OR (recipe_row.status = 'published' AND recipe_row.visibility = 'public')
+            )
+        )
+      )
+    $policy$;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'recipe_comments'
+      AND policyname = 'recipe_comments_all_own'
+  ) THEN
+    EXECUTE $policy$
+      CREATE POLICY "recipe_comments_all_own"
+      ON public.recipe_comments
+      FOR ALL
+      USING (user_id = auth.uid())
+      WITH CHECK (user_id = auth.uid())
+    $policy$;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'recipe_executions'
+      AND policyname = 'recipe_executions_all_own'
+  ) THEN
+    EXECUTE $policy$
+      CREATE POLICY "recipe_executions_all_own"
+      ON public.recipe_executions
+      FOR ALL
+      USING (user_id = auth.uid())
+      WITH CHECK (user_id = auth.uid())
+    $policy$;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'recipe_comment_likes'
+      AND policyname = 'recipe_comment_likes_all_own'
+  ) THEN
+    EXECUTE $policy$
+      CREATE POLICY "recipe_comment_likes_all_own"
+      ON public.recipe_comment_likes
+      FOR ALL
+      USING (user_id = auth.uid())
+      WITH CHECK (user_id = auth.uid())
+    $policy$;
+  END IF;
+END $$;

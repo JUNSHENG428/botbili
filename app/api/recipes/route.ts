@@ -1,72 +1,323 @@
 import { NextResponse } from "next/server";
 
-import { apiErrorResponse } from "@/lib/api-response";
-import { createRecipe, listRecipes } from "@/lib/recipes";
-import { createClientForServer } from "@/lib/supabase/server";
+import { verifyCsrfOrigin } from "@/lib/csrf";
+import { createClientForServer, getSupabaseAdminClient } from "@/lib/supabase/server";
 import type { Recipe } from "@/types/recipe";
 
-interface ListRecipesResponse {
-  data: Recipe[];
-  total: number;
-  page: number;
-  page_size: number;
+type RecipeSort = "trending" | "newest" | "most_starred" | "most_forked" | "most_executed";
+type RecipeVisibility = "public" | "unlisted" | "private";
+type RecipeAuthorType = "human" | "ai_agent";
+type RecipeDifficulty = "beginner" | "intermediate" | "advanced";
+
+interface RecipeAuthorSummary {
+  id: string;
+  username: string;
+  display_name: string | null;
+  avatar_url: string | null;
+  author_type: RecipeAuthorType;
 }
 
-interface CreateRecipeResponse {
-  data: Recipe;
+interface RecipeListItem extends Recipe {
+  author: RecipeAuthorSummary;
+}
+
+interface ProfileRow {
+  id: string;
+  username: string | null;
+  display_name: string | null;
+  avatar_url: string | null;
+}
+
+interface CreatorRow {
+  id: string;
+  owner_id: string;
+  slug: string | null;
+  name: string;
+  avatar_url: string | null;
+}
+
+const VALID_SORTS: RecipeSort[] = ["trending", "newest", "most_starred", "most_forked", "most_executed"];
+const VALID_DIFFICULTIES: RecipeDifficulty[] = ["beginner", "intermediate", "advanced"];
+const VALID_VISIBILITIES: RecipeVisibility[] = ["public", "unlisted", "private"];
+const DEFAULT_PAGE = 1;
+const DEFAULT_LIMIT = 20;
+const MAX_LIMIT = 50;
+
+function successResponse<T>(data: T, status = 200): NextResponse {
+  return NextResponse.json({ success: true, data }, { status });
+}
+
+function errorResponse(message: string, code: string, status: number): NextResponse {
+  return NextResponse.json(
+    {
+      success: false,
+      error: {
+        code,
+        message,
+      },
+    },
+    { status },
+  );
+}
+
+function parsePositiveInteger(rawValue: string | null, fallback: number, max?: number): number | null {
+  if (rawValue === null || rawValue === "") {
+    return fallback;
+  }
+
+  const value = Number.parseInt(rawValue, 10);
+  if (Number.isNaN(value) || value < 1) {
+    return null;
+  }
+
+  if (typeof max === "number") {
+    return Math.min(value, max);
+  }
+
+  return value;
+}
+
+function normalizePlatforms(searchParams: URLSearchParams): string[] {
+  const rawValues = searchParams
+    .getAll("platforms")
+    .flatMap((value) => value.split(","))
+    .map((value) => value.trim().toLowerCase())
+    .filter(Boolean);
+
+  return [...new Set(rawValues)];
+}
+
+function getRecipePlatforms(recipe: Recipe): string[] {
+  const nextPlatforms = Array.isArray(recipe.platforms) ? recipe.platforms : [];
+  const legacyPlatforms = Array.isArray(recipe.platform) ? recipe.platform : [];
+  const merged = nextPlatforms.length > 0 ? nextPlatforms : legacyPlatforms;
+
+  return merged.map((value) => value.toLowerCase());
+}
+
+function calculateTrendingScore(recipe: Recipe): number {
+  return recipe.star_count * 0.45 + recipe.fork_count * 0.3 + recipe.exec_count * 0.25;
+}
+
+function slugifyTitle(title: string): string {
+  const normalized = title
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9\u4e00-\u9fa5]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+
+  return normalized || "recipe";
+}
+
+async function generateUniqueSlug(title: string): Promise<string> {
+  const admin = getSupabaseAdminClient();
+  const base = slugifyTitle(title);
+
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    const suffix = Math.random().toString(36).slice(2, 6);
+    const slug = `${base}-${suffix}`;
+    const { data, error } = await admin
+      .from("recipes")
+      .select("id")
+      .eq("slug", slug)
+      .maybeSingle();
+
+    if (error) {
+      throw new Error(`slug lookup failed: ${error.message}`);
+    }
+
+    if (!data) {
+      return slug;
+    }
+  }
+
+  throw new Error("生成唯一 slug 失败");
+}
+
+async function buildAuthorMap(recipes: Recipe[]): Promise<Map<string, RecipeAuthorSummary>> {
+  const authorIds = [...new Set(recipes.map((recipe) => recipe.author_id))];
+  const authorMap = new Map<string, RecipeAuthorSummary>();
+
+  if (authorIds.length === 0) {
+    return authorMap;
+  }
+
+  const admin = getSupabaseAdminClient();
+
+  const [{ data: profileRows, error: profileError }, { data: creatorRows, error: creatorError }] = await Promise.all([
+    admin.from("profiles").select("id, username, display_name, avatar_url").in("id", authorIds),
+    admin.from("creators").select("id, owner_id, slug, name, avatar_url").in("owner_id", authorIds),
+  ]);
+
+  if (profileError) {
+    throw new Error(`加载作者资料失败: ${profileError.message}`);
+  }
+
+  if (creatorError) {
+    throw new Error(`加载创作者资料失败: ${creatorError.message}`);
+  }
+
+  const profileMap = new Map<string, ProfileRow>();
+  for (const row of (profileRows ?? []) as ProfileRow[]) {
+    profileMap.set(row.id, row);
+  }
+
+  const creatorMap = new Map<string, CreatorRow>();
+  for (const row of (creatorRows ?? []) as CreatorRow[]) {
+    if (!creatorMap.has(row.owner_id)) {
+      creatorMap.set(row.owner_id, row);
+    }
+  }
+
+  for (const recipe of recipes) {
+    if (authorMap.has(recipe.author_id)) {
+      continue;
+    }
+
+    const profile = profileMap.get(recipe.author_id);
+    const creator = creatorMap.get(recipe.author_id);
+
+    const username =
+      profile?.username?.trim() ||
+      creator?.slug?.trim() ||
+      profile?.display_name?.trim()?.toLowerCase().replace(/\s+/g, "-") ||
+      `user-${recipe.author_id.slice(0, 8)}`;
+
+    authorMap.set(recipe.author_id, {
+      id: recipe.author_id,
+      username,
+      display_name: profile?.display_name ?? creator?.name ?? null,
+      avatar_url: profile?.avatar_url ?? creator?.avatar_url ?? null,
+      author_type: recipe.author_type,
+    });
+  }
+
+  return authorMap;
 }
 
 /**
- * GET /api/recipes
- * Query params: sort, page, page_size, tag, difficulty, platform
+ * curl "http://localhost:3000/api/recipes?sort=trending&limit=20"
+ * curl -X POST "http://localhost:3000/api/recipes" \
+ *   -H "Content-Type: application/json" \
+ *   -H "Origin: http://localhost:3000" \
+ *   -d '{"title":"AI 行业热点日报","description":"适合新手的公开视频 Recipe"}'
  */
 export async function GET(request: Request): Promise<NextResponse> {
   try {
     const { searchParams } = new URL(request.url);
 
-    const sort = searchParams.get("sort") ?? "trending";
-    const page = parseInt(searchParams.get("page") ?? "1", 10);
-    const pageSize = parseInt(searchParams.get("page_size") ?? "20", 10);
-    const tag = searchParams.get("tag") ?? undefined;
-    const difficulty = searchParams.get("difficulty") ?? undefined;
-    const platform = searchParams.get("platform") ?? undefined;
+    const sort = (searchParams.get("sort") ?? "trending") as RecipeSort;
+    const q = searchParams.get("q")?.trim().toLowerCase() ?? "";
+    const category = searchParams.get("category")?.trim() ?? "";
+    const difficulty = searchParams.get("difficulty")?.trim() ?? "";
+    const page = parsePositiveInteger(searchParams.get("page"), DEFAULT_PAGE);
+    const limit = parsePositiveInteger(searchParams.get("limit"), DEFAULT_LIMIT, MAX_LIMIT);
+    const platforms = normalizePlatforms(searchParams);
 
-    if (isNaN(page) || page < 1) {
-      return apiErrorResponse({ message: "Invalid page parameter", code: "VALIDATION_INVALID_PAGE", status: 400 });
-    }
-    if (isNaN(pageSize) || pageSize < 1 || pageSize > 100) {
-      return apiErrorResponse({ message: "Invalid page_size parameter", code: "VALIDATION_INVALID_PAGE_SIZE", status: 400 });
+    if (!VALID_SORTS.includes(sort)) {
+      return errorResponse("不支持的排序方式", "INVALID_SORT", 400);
     }
 
-    const { recipes, total } = await listRecipes({
-      sort,
-      page,
-      pageSize,
-      tag,
-      difficulty,
-      platform,
+    if (page === null) {
+      return errorResponse("page 必须是大于 0 的整数", "INVALID_PAGE", 400);
+    }
+
+    if (limit === null) {
+      return errorResponse("limit 必须是大于 0 的整数", "INVALID_LIMIT", 400);
+    }
+
+    if (difficulty && !VALID_DIFFICULTIES.includes(difficulty as RecipeDifficulty)) {
+      return errorResponse("不支持的难度类型", "INVALID_DIFFICULTY", 400);
+    }
+
+    const admin = getSupabaseAdminClient();
+    let query = admin
+      .from("recipes")
+      .select("*")
+      .eq("status", "published")
+      .eq("visibility", "public");
+
+    if (category) {
+      query = query.eq("category", category);
+    }
+
+    if (difficulty) {
+      query = query.eq("difficulty", difficulty);
+    }
+
+    const { data, error } = await query;
+
+    if (error) {
+      throw new Error(`加载 Recipe 列表失败: ${error.message}`);
+    }
+
+    let recipes = (data ?? []) as Recipe[];
+
+    if (q) {
+      recipes = recipes.filter((recipe) => {
+        const haystacks = [recipe.title, recipe.description ?? "", recipe.readme_md ?? ""];
+        return haystacks.some((value) => value.toLowerCase().includes(q));
+      });
+    }
+
+    if (platforms.length > 0) {
+      recipes = recipes.filter((recipe) => {
+        const recipePlatforms = getRecipePlatforms(recipe);
+        return platforms.some((platform) => recipePlatforms.includes(platform));
+      });
+    }
+
+    recipes = recipes.sort((left, right) => {
+      switch (sort) {
+        case "newest":
+          return new Date(right.created_at).getTime() - new Date(left.created_at).getTime();
+        case "most_starred":
+          return right.star_count - left.star_count;
+        case "most_forked":
+          return right.fork_count - left.fork_count;
+        case "most_executed":
+          return right.exec_count - left.exec_count;
+        case "trending":
+        default:
+          return calculateTrendingScore(right) - calculateTrendingScore(left);
+      }
     });
 
-    const response: ListRecipesResponse = {
-      data: recipes,
+    const total = recipes.length;
+    const start = (page - 1) * limit;
+    const pagedRecipes = recipes.slice(start, start + limit);
+    const authorMap = await buildAuthorMap(pagedRecipes);
+
+    const recipeItems: RecipeListItem[] = pagedRecipes.map((recipe) => ({
+      ...recipe,
+      platforms: getRecipePlatforms(recipe),
+      author: authorMap.get(recipe.author_id) ?? {
+        id: recipe.author_id,
+        username: `user-${recipe.author_id.slice(0, 8)}`,
+        display_name: null,
+        avatar_url: null,
+        author_type: recipe.author_type,
+      },
+    }));
+
+    return successResponse({
+      recipes: recipeItems,
       total,
       page,
-      page_size: pageSize,
-    };
-
-    return NextResponse.json(response);
+      limit,
+      hasMore: start + limit < total,
+    });
   } catch (error: unknown) {
     console.error("GET /api/recipes failed:", error);
-    return apiErrorResponse({ message: "Internal server error", code: "INTERNAL_ERROR", status: 500 });
+    return errorResponse("获取 Recipe 列表失败", "INTERNAL_ERROR", 500);
   }
 }
 
-/**
- * POST /api/recipes
- * Requires authentication.
- * author_type is determined from X-BotBili-Client header.
- */
 export async function POST(request: Request): Promise<NextResponse> {
+  if (!verifyCsrfOrigin(request)) {
+    return errorResponse("请求来源校验失败", "CSRF_INVALID", 403);
+  }
+
   try {
     const supabase = await createClientForServer();
     const {
@@ -75,45 +326,83 @@ export async function POST(request: Request): Promise<NextResponse> {
     } = await supabase.auth.getUser();
 
     if (authError || !user) {
-      return apiErrorResponse({ message: "Unauthorized", code: "AUTH_UNAUTHORIZED", status: 401 });
+      return errorResponse("请先登录", "UNAUTHORIZED", 401);
     }
 
-    let body: Record<string, unknown>;
+    let body: {
+      title?: string;
+      description?: string;
+      visibility?: RecipeVisibility;
+    };
+
     try {
-      body = await request.json();
+      body = (await request.json()) as {
+        title?: string;
+        description?: string;
+        visibility?: RecipeVisibility;
+      };
     } catch {
-      return apiErrorResponse({ message: "Invalid request body", code: "VALIDATION_INVALID_BODY", status: 400 });
+      return errorResponse("请求体不是合法 JSON", "INVALID_JSON", 400);
     }
 
-    const { title } = body;
-    if (!title || typeof title !== "string" || title.trim() === "") {
-      return apiErrorResponse({ message: "title is required", code: "VALIDATION_TITLE_REQUIRED", status: 400 });
+    const title = body.title?.trim();
+    if (!title) {
+      return errorResponse("title 为必填项", "TITLE_REQUIRED", 400);
     }
 
-    const clientHeader = request.headers.get("X-BotBili-Client");
-    const authorType: "human" | "ai_agent" = clientHeader === "ai_agent" ? "ai_agent" : "human";
+    if (title.length > 200) {
+      return errorResponse("title 不能超过 200 个字符", "TITLE_TOO_LONG", 400);
+    }
 
-    const recipe = await createRecipe({
+    const description = typeof body.description === "string" ? body.description.trim() : null;
+    if (description && description.length > 500) {
+      return errorResponse("description 不能超过 500 个字符", "DESCRIPTION_TOO_LONG", 400);
+    }
+
+    if (body.visibility && !VALID_VISIBILITIES.includes(body.visibility)) {
+      return errorResponse("visibility 不合法", "INVALID_VISIBILITY", 400);
+    }
+
+    const slug = await generateUniqueSlug(title);
+    const admin = getSupabaseAdminClient();
+    const authorType: RecipeAuthorType =
+      request.headers.get("x-botbili-client") === "agent" ? "ai_agent" : "human";
+
+    const insertPayload = {
       author_id: user.id,
       author_type: authorType,
-      title: body.title as string,
-      description: body.description as string | undefined,
-      readme_md: body.readme_md as string | undefined,
-      tags: (body.tags as string[] | undefined) ?? [],
-      difficulty: body.difficulty as "beginner" | "intermediate" | "advanced" | undefined,
-      platform: (body.platform as string[] | undefined) ?? [],
-      cover_url: body.cover_url as string | undefined,
-      script_template: body.script_template as Record<string, unknown> | undefined,
-      storyboard: body.storyboard as Recipe["storyboard"] | undefined,
-      matrix_config: body.matrix_config as Record<string, unknown> | undefined,
-      tools_required: (body.tools_required as string[] | undefined) ?? [],
-      status: body.status as Recipe["status"] | undefined,
-    });
+      slug,
+      title,
+      description,
+      visibility: body.visibility ?? "public",
+      status: "draft",
+      readme_md: null,
+      readme_json: null,
+      tags: [],
+      difficulty: "beginner",
+      platform: [],
+      platforms: [],
+      language: "zh-CN",
+      cover_url: null,
+      script_template: null,
+      storyboard: null,
+      matrix_config: null,
+      tools_required: [],
+    };
 
-    const response: CreateRecipeResponse = { data: recipe };
-    return NextResponse.json(response, { status: 201 });
+    const { data, error } = await admin
+      .from("recipes")
+      .insert(insertPayload)
+      .select("*")
+      .single();
+
+    if (error) {
+      throw new Error(`创建 Recipe 失败: ${error.message}`);
+    }
+
+    return successResponse({ recipe: data as Recipe }, 201);
   } catch (error: unknown) {
     console.error("POST /api/recipes failed:", error);
-    return apiErrorResponse({ message: "Internal server error", code: "INTERNAL_ERROR", status: 500 });
+    return errorResponse("创建 Recipe 失败", "INTERNAL_ERROR", 500);
   }
 }
