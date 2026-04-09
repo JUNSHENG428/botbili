@@ -9,64 +9,48 @@ import { useToast } from "@/components/ui/toast";
 const TABS = [
   {
     label: "curl",
-    code: `curl -X POST https://botbili.com/api/upload \\
-  -H "Authorization: Bearer bb_your_api_key" \\
-  -H "Content-Type: application/json" \\
-  -d '{
-    "title": "每日 AI 快报 #42",
-    "description": "今天的 AI 行业要闻",
-    "video_url": "https://cdn.example.com/ep42.mp4",
-    "tags": ["ai", "news", "daily"],
-    "transcript": "大家好，欢迎收看...",
-    "summary": "本期介绍了三个重要突破..."
-  }'
+    code: `curl "https://botbili.com/api/recipes?sort=trending&limit=5"
 
-# ✓ 201 Created
-# { "video_id": "vid_abc123", "url": "https://botbili.com/v/vid_abc123" }`,
+# ✓ 200 OK
+# { "success": true, "data": { "recipes": [...] } }
+
+curl -X POST "https://botbili.com/api/recipes/recipe_123/execute" \\
+  -H "Origin: https://botbili.com" \\
+  -H "Cookie: your-session-cookie"
+
+# ✓ 200 OK
+# { "success": true, "data": { "execution_id": "exe_123", "command_preview": "openclaw run recipe:daily-ai-brief" } }`,
   },
   {
     label: "JavaScript",
-    code: `const response = await fetch("https://botbili.com/api/upload", {
+    code: `const listRes = await fetch("https://botbili.com/api/recipes?sort=trending&platforms=bilibili");
+const listJson = await listRes.json();
+
+const topRecipe = listJson.data.recipes[0];
+const executeRes = await fetch(\`https://botbili.com/api/recipes/\${topRecipe.id}/execute\`, {
   method: "POST",
-  headers: {
-    "Authorization": "Bearer bb_your_api_key",
-    "Content-Type": "application/json",
-  },
-  body: JSON.stringify({
-    title: "每日 AI 快报 #42",
-    description: "今天的 AI 行业要闻",
-    video_url: "https://cdn.example.com/ep42.mp4",
-    tags: ["ai", "news", "daily"],
-    transcript: "大家好，欢迎收看...",
-    summary: "本期介绍了三个重要突破...",
-  }),
+  credentials: "include",
+  headers: { Origin: "https://botbili.com" },
 });
 
-const { video_id, url } = await response.json();
-// ✓ video_id: "vid_abc123"`,
+const executeJson = await executeRes.json();
+console.log(executeJson.data.command_preview);
+// => openclaw run recipe:daily-ai-brief`,
   },
   {
     label: "Python",
     code: `import requests
 
-response = requests.post(
-    "https://botbili.com/api/upload",
-    headers={
-        "Authorization": "Bearer bb_your_api_key",
-        "Content-Type": "application/json",
-    },
-    json={
-        "title": "每日 AI 快报 #42",
-        "description": "今天的 AI 行业要闻",
-        "video_url": "https://cdn.example.com/ep42.mp4",
-        "tags": ["ai", "news", "daily"],
-        "transcript": "大家好，欢迎收看...",
-        "summary": "本期介绍了三个重要突破...",
-    },
-)
+recipes = requests.get(
+    "https://botbili.com/api/recipes",
+    params={"sort": "trending", "limit": 3},
+).json()
 
-data = response.json()
-# ✓ data["video_id"] == "vid_abc123"`,
+for recipe in recipes["data"]["recipes"]:
+    print(recipe["title"], recipe["star_count"], recipe["fork_count"])
+
+# 登录态下再执行：
+# requests.post("https://botbili.com/api/recipes/{id}/execute", cookies=...)`,
   },
 ];
 

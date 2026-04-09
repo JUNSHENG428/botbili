@@ -18,6 +18,7 @@ interface DashboardVideo {
   id: string;
   title: string;
   thumbnail_url: string | null;
+  raw_video_url: string | null;
   status: string;
   view_count: number;
   like_count: number;
@@ -49,6 +50,15 @@ interface DashboardResponse {
     total_views: number;
   };
   videos: DashboardVideo[];
+  recipe_stats?: {
+    total_recipes: number;
+    published_recipes: number;
+    draft_recipes: number;
+    total_stars_received: number;
+    total_execs_received: number;
+    total_forks_received: number;
+    recent_executions: number;
+  };
   guarded_channels?: GuardedChannel[];
 }
 
@@ -61,6 +71,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     const requestedCreatorId = req.nextUrl.searchParams.get("creator_id")?.trim() ?? "";
     const supabase = getSupabaseAdminClient();
     let creatorId = requestedCreatorId;
+    let currentUserId: string | null = null;
 
     // 允许已登录用户在未显式传 creator_id 时，自动解析自己的默认频道。
     if (!creatorId) {
@@ -68,6 +79,8 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
       const {
         data: { user },
       } = await userSupabase.auth.getUser();
+
+      currentUserId = user?.id ?? null;
 
       if (!user?.id) {
         return NextResponse.json({ error: "频道不存在" }, { status: 404 });
@@ -108,6 +121,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     if (requestedCreatorId) {
       const authSupabase = await createClientForServer();
       const { data: { user: authUser } } = await authSupabase.auth.getUser();
+      currentUserId = authUser?.id ?? null;
       if (!authUser?.id || (creator.owner_id !== authUser.id && creator.guardian_id !== authUser.id)) {
         return NextResponse.json({ error: "无权访问此频道" }, { status: 403 });
       }
@@ -115,7 +129,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
 
     const { data: videos, error: videosErr } = await supabase
       .from("videos")
-      .select("id, title, thumbnail_url, status, view_count, like_count, comment_count, duration_seconds, created_at")
+      .select("id, title, thumbnail_url, raw_video_url, status, view_count, like_count, comment_count, duration_seconds, created_at")
       .eq("creator_id", creatorId)
       .order("created_at", { ascending: false })
       .limit(200)
@@ -128,6 +142,49 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
 
     const videoList = videos ?? [];
     const totalViews = videoList.reduce((sum, v) => sum + v.view_count, 0);
+
+    let recipeStats: DashboardResponse["recipe_stats"];
+    try {
+      const { data: recipeRows, error: recipeError } = await supabase
+        .from("recipes")
+        .select("id, status, star_count, exec_count, fork_count")
+        .eq("author_id", creator.owner_id);
+
+      if (!recipeError) {
+        const recipes = recipeRows ?? [];
+        const recipeIds = recipes.map((recipe) => recipe.id);
+        const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+
+        let recentExecutions = 0;
+        if (recipeIds.length > 0) {
+          const recentExecutionsQuery = supabase
+            .from("recipe_executions")
+            .select("id", { count: "exact", head: true })
+            .in("recipe_id", recipeIds)
+            .gte("created_at", sevenDaysAgo);
+
+          const { count, error: recentExecutionError } = currentUserId
+            ? await recentExecutionsQuery.neq("user_id", currentUserId)
+            : await recentExecutionsQuery;
+
+          if (!recentExecutionError) {
+            recentExecutions = count ?? 0;
+          }
+        }
+
+        recipeStats = {
+          total_recipes: recipes.length,
+          published_recipes: recipes.filter((recipe) => recipe.status === "published").length,
+          draft_recipes: recipes.filter((recipe) => recipe.status === "draft").length,
+          total_stars_received: recipes.reduce((sum, recipe) => sum + (recipe.star_count ?? 0), 0),
+          total_execs_received: recipes.reduce((sum, recipe) => sum + (recipe.exec_count ?? 0), 0),
+          total_forks_received: recipes.reduce((sum, recipe) => sum + (recipe.fork_count ?? 0), 0),
+          recent_executions: recentExecutions,
+        };
+      }
+    } catch {
+      // Recipe KPI 查询失败不影响主流程
+    }
 
     // 查询当前用户监护的频道
     let guardedChannels: GuardedChannel[] | undefined;
@@ -160,6 +217,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
         total_views: totalViews,
       },
       videos: videoList,
+      recipe_stats: recipeStats,
       guarded_channels: guardedChannels,
     };
 

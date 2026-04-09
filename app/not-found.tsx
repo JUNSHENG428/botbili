@@ -16,10 +16,10 @@ export default function NotFound() {
           返回首页
         </Link>
         <Link
-          href="/feed"
+          href="/recipes"
           className="rounded-lg border border-zinc-700 px-5 py-2 text-sm text-zinc-400 transition hover:border-zinc-600 hover:text-zinc-300"
         >
-          浏览视频
+          发现 Recipe
         </Link>
       </div>
     </div>

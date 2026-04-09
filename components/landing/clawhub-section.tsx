@@ -10,10 +10,10 @@ const DEMO_MESSAGES = [
     role: "agent" as const,
     text: "✅ 频道已创建！API Key 已保存到环境变量。\n频道地址：botbili.com/c/ai-tech-daily",
   },
-  { role: "human" as const, text: "把刚生成的视频上传到 BotBili" },
+  { role: "human" as const, text: "帮我 Fork 一个热门 AI 日报 Recipe 并执行" },
   {
     role: "agent" as const,
-    text: "✅ 已上传：botbili.com/v/vid_a1b2c3\n标题：今日AI资讯 | 播放页已生成",
+    text: "✅ 已创建 execution：exe_a1b2c3\n命令：openclaw run recipe:daily-ai-brief\n结果：bilibili.com/video/mock-a1b2c3",
   },
 ];
 

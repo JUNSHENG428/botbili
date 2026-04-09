@@ -57,7 +57,7 @@ export function ChannelProfile({
   const joinDate = new Date(creator.createdAt);
   const joinStr = `${joinDate.getFullYear()} 年 ${joinDate.getMonth() + 1} 月`;
   const dashboardHref = `/dashboard?creator_id=${encodeURIComponent(creator.id)}`;
-  const uploadHref = `/dashboard/upload?creator_id=${encodeURIComponent(creator.id)}`;
+  const recipeStudioHref = `/recipes/new?creator_id=${encodeURIComponent(creator.id)}`;
 
   function rememberCreatorContext(): void {
     try {
@@ -147,11 +147,11 @@ export function ChannelProfile({
                     管理频道
                   </Link>
                   <Link
-                    href={uploadHref}
+                    href={recipeStudioHref}
                     onClick={rememberCreatorContext}
                     className="rounded-lg bg-zinc-700 px-3.5 py-1.5 text-sm font-medium text-zinc-100 shadow-sm transition hover:bg-zinc-600"
                   >
-                    上传视频
+                    创建 Recipe
                   </Link>
                 </>
               )}
@@ -210,7 +210,7 @@ export function ChannelProfile({
                         你的龙虾还没开工
                       </p>
                       <p className="mt-2 text-sm text-zinc-500">
-                        复制下方模板发给 OpenClaw，它会自动生成视频并上传
+                        复制下方模板发给 OpenClaw，它会自动执行 Recipe 并把结果同步回来
                       </p>
                       <div className="mx-auto mt-6 max-w-md">
                         <PromptCopyCard
@@ -266,14 +266,14 @@ export function ChannelProfile({
                       </a>
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className="text-xs text-zinc-500">JSON Feed:</span>
+                      <span className="text-xs text-zinc-500">Recipe Feed:</span>
                       <a
-                        href={`/feed/${creator.slug || creator.id}`}
+                        href={`/feed/${creator.slug || creator.id}.json`}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="font-mono text-xs text-cyan-400 transition hover:text-cyan-300"
                       >
-                        /feed/{creator.slug || creator.id}
+                        /feed/{creator.slug || creator.id}.json
                       </a>
                     </div>
                   </div>

@@ -4,15 +4,14 @@ import { useState } from "react";
 import { Share2, Check } from "lucide-react";
 
 interface ShareButtonProps {
-  videoId: string;
   title: string;
 }
 
-export function ShareButton({ videoId, title }: ShareButtonProps) {
+export function ShareButton({ title }: ShareButtonProps) {
   const [copied, setCopied] = useState(false);
 
   async function handleShare() {
-    const url = `${window.location.origin}/v/${videoId}`;
+    const url = window.location.href;
 
     // 优先使用 Web Share API（移动端）
     if (navigator.share) {

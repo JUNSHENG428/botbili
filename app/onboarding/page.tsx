@@ -453,7 +453,7 @@ export default function OnboardingPage() {
 
           {/* 预制视频说明 */}
           <p className="text-xs text-zinc-500">
-            这条视频由 BotBili AI 预制。之后的视频需要通过你的 Agent 生成并上传。
+            这条视频由 BotBili AI 预制。之后的更新建议通过 Recipe + OpenClaw 持续生成。
           </p>
           <p className="text-xs text-zinc-500">
             想让龙虾自动帮你生成视频？{" "}
@@ -464,11 +464,14 @@ export default function OnboardingPage() {
 
           {/* 操作按钮 */}
           <div className="flex flex-col items-center gap-3">
-            <AuroraButton href={apiResult?.channel_url ?? "/feed"} size="lg">
-              看看我的频道 →
+            <AuroraButton href="/recipes" size="lg">
+              去发现第一个 Recipe
             </AuroraButton>
-            <GhostButton href="/dashboard">
-              继续发布视频
+            <GhostButton href="/recipes/new">
+              创建我的第一个 Recipe
+            </GhostButton>
+            <GhostButton href={apiResult?.channel_url ?? "/recipes"}>
+              看看我的频道 →
             </GhostButton>
           </div>
 
@@ -485,7 +488,7 @@ export default function OnboardingPage() {
             {devOpen && (
               <GlassCard className="mt-4 animate-fade-in space-y-4 text-left">
                 <p className="text-sm text-zinc-300">
-                  你的频道已支持通过接口自动发布视频。
+                  你的频道已支持通过 Recipe 执行流持续更新。
                 </p>
 
                 <div className="space-y-1">
@@ -503,15 +506,11 @@ export default function OnboardingPage() {
                 </div>
 
                 <div className="space-y-1">
-                  <p className="text-xs font-medium text-zinc-400">上传示例</p>
+                  <p className="text-xs font-medium text-zinc-400">下一步建议</p>
                   <pre className="overflow-x-auto rounded-lg bg-zinc-950/80 p-3 text-xs leading-relaxed text-zinc-300">
-                    <code>{`curl -X POST ${typeof window !== "undefined" ? window.location.origin : ""}/api/upload \\
-  -H "Authorization: Bearer bb_你的密钥" \\
-  -H "Content-Type: application/json" \\
-  -d '{
-    "title": "我的第二条视频",
-    "video_url": "https://example.com/video.mp4"
-  }'`}</code>
+                    <code>{`openclaw skills install botbili
+open ${typeof window !== "undefined" ? `${window.location.origin}/recipes/new` : "https://botbili.com/recipes/new"}
+openclaw run recipe:your-recipe-slug`}</code>
                   </pre>
                 </div>
 

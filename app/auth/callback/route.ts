@@ -13,8 +13,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const code = searchParams.get("code");
   const tokenHash = searchParams.get("token_hash");
   const type = searchParams.get("type");
-  const nextPath = searchParams.get("next") ?? "/feed";
-  const redirectPath = nextPath.startsWith("/") ? nextPath : "/feed";
+  const nextPath = searchParams.get("next") ?? "/recipes";
+  const redirectPath = nextPath.startsWith("/") ? nextPath : "/recipes";
 
   const supabase = await createClientForServer();
 

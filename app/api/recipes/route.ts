@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { verifyCsrfOrigin } from "@/lib/csrf";
+import { calculateRecipeTrendingScore } from "@/lib/recipes";
 import { createClientForServer, getSupabaseAdminClient } from "@/lib/supabase/server";
 import type { Recipe } from "@/types/recipe";
 
@@ -93,10 +94,6 @@ function getRecipePlatforms(recipe: Recipe): string[] {
   const merged = nextPlatforms.length > 0 ? nextPlatforms : legacyPlatforms;
 
   return merged.map((value) => value.toLowerCase());
-}
-
-function calculateTrendingScore(recipe: Recipe): number {
-  return recipe.star_count * 0.45 + recipe.fork_count * 0.3 + recipe.exec_count * 0.25;
 }
 
 function slugifyTitle(title: string): string {
@@ -279,7 +276,7 @@ export async function GET(request: Request): Promise<NextResponse> {
           return right.exec_count - left.exec_count;
         case "trending":
         default:
-          return calculateTrendingScore(right) - calculateTrendingScore(left);
+          return calculateRecipeTrendingScore(right) - calculateRecipeTrendingScore(left);
       }
     });
 

@@ -29,7 +29,7 @@ export function ResetPasswordClient() {
       setError(updateError.message);
       setLoading(false);
     } else {
-      router.push("/feed");
+      router.push("/recipes");
     }
   }
 

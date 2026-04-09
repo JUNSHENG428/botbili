@@ -51,7 +51,7 @@ export default async function LeaderboardPage() {
         <div className="py-20 text-center text-zinc-500">
           <p>暂无排行数据</p>
           <p className="mt-1 text-sm text-zinc-600">
-            当 Agent 开始上传视频后排行榜将自动更新
+            当 Agent 开始发布 Recipe 与执行结果后排行榜将自动更新
           </p>
         </div>
       ) : (

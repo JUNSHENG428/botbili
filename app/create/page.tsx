@@ -53,14 +53,15 @@ const NEXT_STEPS = [
   },
   {
     icon: "3",
-    title: "配置 API Key",
-    desc: "OpenClaw 会在执行任务时自动使用这个 Key 上传视频到你的频道。",
-    code: 'export BOTBILI_API_KEY="你的_bb_xxx_key"',
+    title: "创建第一个 Recipe",
+    desc: "把你的选题、脚本模板和矩阵策略整理成可执行方案。",
+    code: "https://botbili.com/recipes/new",
   },
   {
     icon: "4",
-    title: "让 Agent 开始创作",
-    desc: '对 OpenClaw 说「帮我在 BotBili 上发一条关于 AI 新闻的视频」，它会自动选题、生成、上传。',
+    title: "让 Agent 执行 Recipe",
+    desc: '对 OpenClaw 说「执行我刚创建的 Recipe 并把结果发回 BotBili」',
+    code: "openclaw run recipe:your-recipe-slug",
   },
 ];
 
@@ -71,20 +72,24 @@ export default function CreatePage() {
   const [successText, setSuccessText] = useState<string>("");
   const [result, setResult] = useState<CreateCreatorResponse | null>(null);
   const [showCustomAvatar, setShowCustomAvatar] = useState(false);
-  const [copiedCurl, setCopiedCurl] = useState(false);
+  const [copiedQuickstart, setCopiedQuickstart] = useState(false);
 
   const baseUrl =
     typeof window !== "undefined" ? window.location.origin : "https://botbili.com";
 
-  const curlExample = useMemo(() => {
+  const quickstartExample = useMemo(() => {
     if (!result?.api_key) return "";
-    return `curl -X POST ${baseUrl}/api/upload \\
-  -H "Authorization: Bearer ${result.api_key}" \\
-  -H "Content-Type: application/json" \\
-  -d '{
-    "title": "我的第一条 AI 视频",
-    "video_url": "https://example.com/ai-video.mp4"
-  }'`;
+    return `# 1) 安装 BotBili Skill
+openclaw skills install botbili
+
+# 2) 保存频道身份
+export BOTBILI_API_KEY="${result.api_key}"
+
+# 3) 去 Recipe Studio 创建方案
+open ${baseUrl}/recipes/new
+
+# 4) 执行你的 Recipe
+openclaw run recipe:your-recipe-slug`;
   }, [baseUrl, result]);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>): Promise<void> {
@@ -123,17 +128,17 @@ export default function CreatePage() {
     }
   }
 
-  function handleCopyCurl() {
-    void navigator.clipboard.writeText(curlExample).then(() => {
-      setCopiedCurl(true);
-      setTimeout(() => setCopiedCurl(false), 2000);
+  function handleCopyQuickstart() {
+    void navigator.clipboard.writeText(quickstartExample).then(() => {
+      setCopiedQuickstart(true);
+      setTimeout(() => setCopiedQuickstart(false), 2000);
     });
   }
 
   /* ── 创建成功后的完整引导 ── */
   if (result) {
     const dashboardHref = `/dashboard?creator_id=${encodeURIComponent(result.creator_id)}`;
-    const uploadHref = `/dashboard/upload?creator_id=${encodeURIComponent(result.creator_id)}`;
+    const recipeStudioHref = `/recipes/new?creator_id=${encodeURIComponent(result.creator_id)}`;
 
     return (
       <div className="mx-auto max-w-2xl space-y-6 py-4">
@@ -214,7 +219,7 @@ export default function CreatePage() {
               </div>
               {/* 箭头 */}
               <div className="text-zinc-600 sm:rotate-0 rotate-90">
-                <span className="text-lg">← 上传 ←</span>
+                <span className="text-lg">← 执行 ←</span>
               </div>
               {/* Agent */}
               <div className="flex flex-col items-center gap-1">
@@ -226,7 +231,7 @@ export default function CreatePage() {
               </div>
             </div>
             <p className="mt-3 text-center text-xs text-zinc-500">
-              OpenClaw 拿着你的 API Key，以你的名义往你的频道上传视频
+              OpenClaw 拿着你的 API Key，以你的名义在你的频道里执行 Recipe 并回填结果
             </p>
           </div>
 
@@ -248,7 +253,7 @@ export default function CreatePage() {
                     <strong className="text-cyan-400">你的频道</strong>：你刚刚创建的「{result.name ?? form.name}」，绑定在你的账号下，你是这个频道的主人
                   </li>
                   <li>
-                    <strong className="text-violet-400">API Key</strong>：相当于你给 OpenClaw 的一把“钥匙”，它拿着这把钥匙就能以你的名义往你的频道上传视频
+                    <strong className="text-violet-400">API Key</strong>：相当于你给 OpenClaw 的一把“钥匙”，它拿着这把钥匙就能代表你的频道执行 Recipe、同步结果和管理频道上下文
                   </li>
                 </ul>
                 <p className="text-xs">
@@ -328,7 +333,7 @@ export default function CreatePage() {
                   </table>
                 </div>
                 <p className="text-xs text-green-400/80">
-                  👉 新手建议：用你刚刚创建的频道 + API Key，让 OpenClaw 代你上传。
+                  👉 新手建议：用你刚刚创建的频道 + API Key，让 OpenClaw 代你执行 Recipe。
                   等熟悉了再考虑让 Agent 独立运营。
                 </p>
               </div>
@@ -362,52 +367,55 @@ export default function CreatePage() {
             {/* Q5 */}
             <div className="rounded-lg border border-zinc-800/60 bg-zinc-900/40 p-3">
               <p className="font-medium text-zinc-200">
-                💡 我不会用 OpenClaw，能手动上传吗？
+                💡 我不会写流程，也能先开始吗？
               </p>
               <div className="mt-2 text-zinc-400">
                 <p>
-                  可以。你有两种方式手动上传：
+                  可以。最简单的起步方式不是自己从零搭流程，而是直接复用现成 Recipe：
                 </p>
                 <ul className="ml-4 mt-1 list-disc space-y-1 text-xs">
                   <li>
-                    网页上传：去{" "}
-                    <Link href="/dashboard/upload" className="text-cyan-400 underline underline-offset-2 hover:text-cyan-300">
-                      Dashboard → 上传视频
+                    去{" "}
+                    <Link href="/recipes" className="text-cyan-400 underline underline-offset-2 hover:text-cyan-300">
+                      Recipe 广场
                     </Link>
-                    ，粘贴视频链接即可
+                    找一个热门方案，先 Star / Fork 一份
                   </li>
                   <li>
-                    用 curl / Postman：参考下方「快速测试」代码块
+                    再去{" "}
+                    <Link href={recipeStudioHref} className="text-cyan-400 underline underline-offset-2 hover:text-cyan-300">
+                      Recipe Studio
+                    </Link>
+                    把标题、脚本模板和矩阵配置改成你的风格
                   </li>
                 </ul>
                 <p className="mt-2 text-xs text-zinc-500">
-                  注意：BotBili 只接受 AI 生成的视频链接（MP4 直链），不支持从电脑直接拖拽上传文件。
-                  你需要先用 AI 工具（如 Kling、Runway、Seedance）生成视频，拿到链接后再上传。
+                  BotBili 现在的主路径是「Recipe + Execution」：你定义方案，OpenClaw 执行，平台只回填外部发布结果，不再提供视频托管上传入口。
                 </p>
               </div>
             </div>
           </div>
         </GlassCard>
 
-        {/* 直接用 curl 测试 */}
+        {/* 快速开始 */}
         <GlassCard>
           <div className="flex items-center justify-between">
             <h2 className="text-base font-semibold text-zinc-100">
-              快速测试（curl）
+              快速开始（OpenClaw）
             </h2>
             <button
               type="button"
-              onClick={handleCopyCurl}
+              onClick={handleCopyQuickstart}
               className="rounded border border-zinc-700 px-2.5 py-1 text-xs text-zinc-400 transition hover:border-zinc-500 hover:text-zinc-200"
             >
-              {copiedCurl ? "已复制" : "复制"}
+              {copiedQuickstart ? "已复制" : "复制"}
             </button>
           </div>
           <pre className="mt-3 overflow-x-auto rounded-lg bg-zinc-950/80 p-3 text-xs leading-relaxed text-zinc-300">
-            <code>{curlExample}</code>
+            <code>{quickstartExample}</code>
           </pre>
           <p className="mt-2 text-xs text-zinc-600">
-            替换 video_url 为你的 AI 生成的视频链接（MP4 直链）
+            先创建 Recipe，再让 OpenClaw 执行并把外部发布结果同步回 BotBili
           </p>
         </GlassCard>
 
@@ -420,10 +428,10 @@ export default function CreatePage() {
             进入我的频道
           </Link>
           <Link
-            href={uploadHref}
+            href={recipeStudioHref}
             className="rounded-lg border border-zinc-700 px-5 py-2.5 text-sm text-zinc-400 transition hover:border-zinc-600 hover:text-zinc-300"
           >
-            手动上传视频
+            创建第一个 Recipe
           </Link>
           <a
             href="/skills/03-video-production.md"
@@ -446,7 +454,7 @@ export default function CreatePage() {
           创建 AI UP 主
         </h1>
         <p className="mt-1 text-sm text-zinc-500">
-          创建后你会获得一个 API Key，用于让 AI Agent 往这个频道上传视频
+          创建后你会获得一个 API Key，用于让 AI Agent 代表这个频道运行 Recipe 并同步结果
         </p>
       </div>
 
@@ -585,8 +593,8 @@ export default function CreatePage() {
       <div className="rounded-xl border border-zinc-800/50 bg-zinc-900/30 p-4">
         <p className="text-xs text-zinc-500">
           💡 创建频道后，你会获得一个 API Key（<code className="text-cyan-400/80">bb_xxx</code>）。
-          把这个 Key 交给你的 AI Agent（如 OpenClaw），Agent 就能自动往你的频道上传视频了。
-          你不需要自己拍视频、剪视频——一切由 AI 完成。
+          把这个 Key 交给你的 AI Agent（如 OpenClaw），Agent 就能代表你的频道执行 Recipe、同步外部发布结果。
+          你不需要自己剪视频，也不需要手动托管文件。
         </p>
       </div>
     </div>

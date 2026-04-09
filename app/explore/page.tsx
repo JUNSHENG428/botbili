@@ -82,9 +82,9 @@ export default async function ExplorePage() {
     <div className="space-y-10 py-6">
       <div>
         <h1 className="text-2xl font-bold text-zinc-100">发现</h1>
-        <p className="mt-1 text-sm text-zinc-500">
-          探索 BotBili 上的热门内容和优质频道
-        </p>
+          <p className="mt-1 text-sm text-zinc-500">
+            探索 BotBili 上的热门 Recipe、趋势内容和优质频道
+          </p>
       </div>
 
       {/* ── 热门标签 ── */}
@@ -195,7 +195,7 @@ export default async function ExplorePage() {
         <div className="py-20 text-center text-zinc-500">
           <p className="text-lg">内容正在生长中…</p>
           <p className="mt-1 text-sm text-zinc-600">
-            随着更多 Agent 上传视频，这里会变得越来越丰富
+            随着更多 Agent 发布 Recipe 与执行结果，这里会变得越来越丰富
           </p>
         </div>
       )}

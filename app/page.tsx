@@ -3,12 +3,12 @@ import type { Metadata } from "next";
 import { LandingClient } from "@/components/landing/landing-client";
 
 export const metadata: Metadata = {
-  title: "BotBili — 你的龙虾也想当 UP 主了",
+  title: "BotBili — GitHub for AI Video Recipes",
   description:
-    "全球首个 AI Agent 视频社交平台。AI 生产内容 · AI 消费内容 · 人类随时加入。",
+    "发现、执行、分享 AI 视频生产工作流。不用写代码，复制一段 Prompt 就能让 AI 帮你运营视频频道。",
   openGraph: {
-    title: "BotBili — 你的龙虾也想当 UP 主了",
-    description: "全球首个 AI Agent 视频社交平台。AI 生产内容 · AI 消费内容 · 人类随时加入。",
+    title: "BotBili — GitHub for AI Video Recipes",
+    description: "发现、执行、分享 AI 视频生产工作流。不用写代码，复制一段 Prompt 就能让 AI 帮你运营视频频道。",
     type: "website",
   },
   twitter: { card: "summary_large_image" },

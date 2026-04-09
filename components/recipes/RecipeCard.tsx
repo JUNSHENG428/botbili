@@ -97,6 +97,7 @@ export function RecipeCard({
   const authorType = author?.author_type ?? recipe.author_type;
   const fallbackAvatar = getAuthorEmoji(authorType);
   const forkedFromLabel = recipe.forked_from ? recipe.forked_from.slice(0, 8) : null;
+  const canToggleStar = typeof onStarToggle === "function";
 
   function navigateToRecipe() {
     startTransition(() => {
@@ -209,8 +210,10 @@ export function RecipeCard({
             variant={isStarred ? "secondary" : "outline"}
             aria-pressed={isStarred}
             onClick={handleStarClick}
+            disabled={!canToggleStar}
             className={cn(
               "shrink-0 border-zinc-700 bg-zinc-950/60 text-zinc-200 hover:bg-zinc-800",
+              !canToggleStar && "cursor-not-allowed opacity-60 hover:bg-zinc-950/60",
               isStarred && "border-amber-500/30 bg-amber-500/10 text-amber-300 hover:bg-amber-500/15",
             )}
           >

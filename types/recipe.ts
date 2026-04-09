@@ -1,3 +1,12 @@
+export type RecipeExecutionStatus =
+  | 'pending'
+  | 'running'
+  | 'script_done'
+  | 'edit_done'
+  | 'publishing'
+  | 'success'
+  | 'failed';
+
 export interface Recipe {
   id: string;
   author_id: string;
@@ -66,7 +75,7 @@ export interface RecipeExecution {
   id: string;
   recipe_id: string;
   user_id: string;
-  status: string;
+  status: RecipeExecutionStatus;
   progress: number;
   progress_pct: number;
   error_message: string | null;
@@ -80,6 +89,16 @@ export interface RecipeExecution {
   completed_at: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface RecipeExecutionCallbackPayload {
+  status: RecipeExecutionStatus;
+  progress_pct?: number;
+  output_external_url?: string | null;
+  output_thumbnail_url?: string | null;
+  output_platform?: string | null;
+  error_message?: string | null;
+  command_text?: string | null;
 }
 
 export interface RecipeStar {

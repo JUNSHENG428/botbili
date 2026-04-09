@@ -5,24 +5,11 @@ import { slugifyCreatorName } from "@/lib/agent-card";
 import type {
   CreateCreatorRequest,
   Creator,
-  UploadRequest,
-  VideoInsert,
   VideoRecord,
   VideoWithCreator,
   VideoWithCreatorWithoutTranscript,
   VideoStatus,
 } from "@/types";
-
-interface QuotaSnapshot {
-  uploads_this_month: number;
-  upload_quota: number;
-  quota_reset_at: string;
-}
-
-interface CreatorQuotaUpdate {
-  uploads_this_month: number;
-  quota_reset_at: string;
-}
 
 interface PublishedVideosQueryRow extends VideoRecord {
   creator: {
@@ -51,11 +38,6 @@ interface GetPublishedVideosOptionsWithoutTranscript {
   includeTranscript?: false;
 }
 
-function getNextMonthStartIso(now: Date): string {
-  const next = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1, 0, 0, 0));
-  return next.toISOString();
-}
-
 /**
  * 根据 API Key 哈希查找 creator。
  */
@@ -72,15 +54,6 @@ export async function verifyApiKey(keyHash: string): Promise<Creator | null> {
   }
 
   return data;
-}
-
-async function updateCreatorQuota(creatorId: string, payload: CreatorQuotaUpdate): Promise<void> {
-  const supabase = getSupabaseAdminClient();
-  const { error } = await supabase.from("creators").update(payload).eq("id", creatorId);
-
-  if (error) {
-    throw new Error(`updateCreatorQuota failed: ${error.message}`);
-  }
 }
 
 /**
@@ -103,58 +76,6 @@ export async function checkAndIncrementQuota(creatorId: string): Promise<boolean
   }
 
   return result.allowed;
-}
-
-/**
- * 创建上传视频记录，状态固定为 processing。
- */
-export async function createVideo(
-  creatorId: string,
-  payload: UploadRequest,
-  cloudflareUid: string,
-  playbackUrl: string,
-): Promise<VideoRecord> {
-  const supabase = getSupabaseAdminClient();
-
-  const insertData: VideoInsert = {
-    creator_id: creatorId,
-    title: payload.title,
-    description: payload.description ?? "",
-    tags: payload.tags ?? [],
-    raw_video_url: payload.video_url,
-    thumbnail_url: payload.thumbnail_url ?? null,
-    transcript: payload.transcript ?? null,
-    summary: payload.summary ?? null,
-    language: payload.language ?? "zh-CN",
-    cloudflare_video_id: cloudflareUid,
-    cloudflare_playback_url: playbackUrl,
-    status: "processing",
-    source: "upload",
-  };
-
-  const { data, error } = await supabase
-    .from("videos")
-    .insert(insertData)
-    .select("*")
-    .single<VideoRecord>();
-
-  if (error) {
-    throw new Error(`createVideo failed: ${error.message}`);
-  }
-
-  return data;
-}
-
-/**
- * 删除视频记录。
- */
-export async function deleteVideoRecord(videoId: string): Promise<void> {
-  const supabase = getSupabaseAdminClient();
-  const { error } = await supabase.from("videos").delete().eq("id", videoId);
-
-  if (error) {
-    throw new Error(`deleteVideoRecord failed: ${error.message}`);
-  }
 }
 
 /**
@@ -424,36 +345,4 @@ export async function getPublishedVideosByCreatorId(creatorId: string): Promise<
     throw new Error(`getPublishedVideosByCreatorId failed: ${error.message}`);
   }
   return data ?? [];
-}
-
-/**
- * 更新 Cloudflare 回调后的状态和元数据。
- */
-export async function updateVideoStatus(
-  cloudflareUid: string,
-  status: VideoStatus,
-  extras: { durationSeconds?: number | null; thumbnailUrl?: string | null } = {},
-): Promise<void> {
-  const supabase = getSupabaseAdminClient();
-  const payload: {
-    status: VideoStatus;
-    duration_seconds?: number | null;
-    thumbnail_url?: string | null;
-  } = { status };
-
-  if (extras.durationSeconds !== undefined) {
-    payload.duration_seconds = extras.durationSeconds;
-  }
-  if (extras.thumbnailUrl !== undefined) {
-    payload.thumbnail_url = extras.thumbnailUrl;
-  }
-
-  const { error } = await supabase
-    .from("videos")
-    .update(payload)
-    .eq("cloudflare_video_id", cloudflareUid);
-
-  if (error) {
-    throw new Error(`updateVideoStatus failed: ${error.message}`);
-  }
 }

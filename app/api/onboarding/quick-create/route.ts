@@ -137,6 +137,7 @@ export async function POST(
       null,
       slug,
     );
+    const channelUrl = `/c/${creator.slug ?? getCreatorSlug({ id: creator.id, name: trimmedName })}`;
 
     /* ── 匹配预制视频并复制到新频道 ── */
     let firstVideo: QuickCreateResponse["first_video"] = null;
@@ -187,7 +188,7 @@ export async function POST(
             id: newVideo.id,
             title: newVideo.title,
             thumbnail_url: newVideo.thumbnail_url,
-            url: `/v/${newVideo.id}`,
+            url: channelUrl,
           };
         }
       }
@@ -221,7 +222,7 @@ export async function POST(
           id: fallback.id,
           title: fallback.title,
           thumbnail_url: fallback.thumbnail_url,
-          url: `/v/${fallback.id}`,
+          url: channelUrl,
         };
       }
     }
@@ -231,7 +232,7 @@ export async function POST(
         creator_id: creator.id,
         creator_name: trimmedName,
         first_video: firstVideo,
-        channel_url: `/c/${creator.slug ?? getCreatorSlug({ id: creator.id, name: trimmedName })}`,
+        channel_url: channelUrl,
       },
       { status: 201 },
     );

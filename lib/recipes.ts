@@ -7,6 +7,27 @@ import type {
   RecipeExecution,
 } from '@/types/recipe';
 
+export function calculateRecipeTrendingScore(
+  recipe: Pick<Recipe, 'star_count' | 'fork_count' | 'exec_count' | 'created_at'>,
+): number {
+  const baseScore = recipe.star_count * 0.45 + recipe.fork_count * 0.3 + recipe.exec_count * 0.25;
+
+  if (baseScore <= 0) {
+    return 0;
+  }
+
+  const createdAtMs = new Date(recipe.created_at).getTime();
+  const ageInDays = Number.isFinite(createdAtMs)
+    ? Math.max(0, (Date.now() - createdAtMs) / (1000 * 60 * 60 * 24))
+    : 30;
+
+  // 让近期高质量 Recipe 更容易进入前排，避免榜单永远被旧内容占住。
+  const decayMultiplier = Math.pow(0.5, ageInDays / 7);
+  const freshnessBonus = Math.max(0, 1 - ageInDays / 14) * 0.15;
+
+  return baseScore * decayMultiplier + freshnessBonus;
+}
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -75,18 +96,29 @@ export async function listRecipes(
   let query = admin
     .from('recipes')
     .select('*', { count: 'exact' })
-    .eq('status', 'published')
-    .order(orderCol, { ascending: orderAsc })
-    .range((page - 1) * pageSize, page * pageSize - 1);
+    .eq('status', 'published');
 
   if (tag) query = query.contains('tags', [tag]);
   if (difficulty) query = query.eq('difficulty', difficulty);
   if (platform) query = query.contains('platform', [platform]);
 
+  if (sort !== 'trending') {
+    query = query
+      .order(orderCol, { ascending: orderAsc })
+      .range((page - 1) * pageSize, page * pageSize - 1);
+  }
+
   const { data, error, count } = await query;
   if (error) throw new Error(`listRecipes failed: ${error.message}`);
 
-  const recipes = (data ?? []) as Recipe[];
+  let recipes = (data ?? []) as Recipe[];
+
+  if (sort === 'trending') {
+    recipes = recipes
+      .sort((left, right) => calculateRecipeTrendingScore(right) - calculateRecipeTrendingScore(left))
+      .slice((page - 1) * pageSize, page * pageSize);
+  }
+
   const authorIds = [...new Set(recipes.map((r) => r.author_id))];
   const profileMap = await fetchProfiles(authorIds);
 

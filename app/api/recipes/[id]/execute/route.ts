@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 
 import { verifyCsrfOrigin } from "@/lib/csrf";
-import { runRecipeMock } from "@/lib/executions/runRecipeMock";
+import { startRecipeExecution } from "@/lib/executions/openclaw";
+import { updateExecutionById } from "@/lib/executions/updateExecution";
 import { createClientForServer, getSupabaseAdminClient } from "@/lib/supabase/server";
 import type { Recipe } from "@/types/recipe";
 
@@ -24,6 +25,29 @@ function errorResponse(message: string, code: string, status: number): NextRespo
     },
     { status },
   );
+}
+
+async function insertAnalyticsEvent(payload: {
+  event_name: "recipe_execute_success" | "recipe_execute_failed";
+  user_id: string;
+  recipe_id: string;
+  execution_id: string;
+  error?: string;
+}): Promise<void> {
+  try {
+    const admin = getSupabaseAdminClient();
+    await admin.from("analytics_events").insert({
+      event_name: payload.event_name,
+      user_id: payload.user_id,
+      properties: {
+        recipe_id: payload.recipe_id,
+        execution_id: payload.execution_id,
+        ...(payload.error ? { error: payload.error } : {}),
+      },
+    });
+  } catch {
+    // 埋点失败不影响执行主流程
+  }
 }
 
 async function resolveRecipe(identifier: string): Promise<Recipe | null> {
@@ -129,9 +153,37 @@ export async function POST(request: Request, context: RouteContext): Promise<Nex
       throw new Error(`创建 Execution 失败: ${insertError.message}`);
     }
 
-    void runRecipeMock(execution.id).catch((error) => {
-      console.error("runRecipeMock failed:", error);
+    await insertAnalyticsEvent({
+      event_name: "recipe_execute_success",
+      user_id: user.id,
+      recipe_id: recipe.id,
+      execution_id: execution.id,
     });
+
+    try {
+      await startRecipeExecution({
+        executionId: execution.id,
+        recipe,
+        commandPreview,
+        inputOverrides: body.input_overrides ?? null,
+      });
+    } catch (dispatchError) {
+      console.error("startRecipeExecution failed:", dispatchError);
+      await insertAnalyticsEvent({
+        event_name: "recipe_execute_failed",
+        user_id: user.id,
+        recipe_id: recipe.id,
+        execution_id: execution.id,
+        error: dispatchError instanceof Error ? dispatchError.message : "提交到执行引擎失败",
+      });
+      await updateExecutionById(execution.id, {
+        status: "failed",
+        progress_pct: 100,
+        error_message:
+          dispatchError instanceof Error ? dispatchError.message : "提交到执行引擎失败",
+      });
+      return errorResponse("提交到执行引擎失败", "EXECUTION_DISPATCH_FAILED", 502);
+    }
 
     return successResponse(
       {

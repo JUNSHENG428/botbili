@@ -7,4 +7,5 @@ export interface VideoCardData {
   durationSeconds?: number | null;
   createdAt?: string;
   coverUrl?: string | null;
+  externalUrl?: string | null;
 }

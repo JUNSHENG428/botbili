@@ -1,10 +1,12 @@
 "use client";
 
-import { use, useEffect, useState } from "react";
+import { use, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
 import { GlassCard } from "@/components/design/glass-card";
+import { RecipePublishButton } from "@/components/recipes/RecipePublishButton";
+import { RecipeShareButton } from "@/components/recipes/RecipeShareButton";
 import { RecipeComments } from "@/components/recipes/comments";
 import { RecipeExecutePanel } from "@/components/recipes/detail/RecipeExecutePanel";
 import { RecipeExecutionHistory } from "@/components/recipes/detail/RecipeExecutionHistory";
@@ -12,6 +14,7 @@ import { RecipeHeader } from "@/components/recipes/detail/RecipeHeader";
 import { RecipeStoryboard } from "@/components/recipes/detail/RecipeStoryboard";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
+import { track } from "@/lib/analytics";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 import type { Recipe } from "@/types/recipe";
@@ -202,6 +205,7 @@ export default function RecipeDetailPage({ params }: RecipeDetailPageProps) {
   const [error, setError] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
   const [pendingExecution, setPendingExecution] = useState<PendingExecutionState | null>(null);
+  const lastTrackedRecipeViewRef = useRef<string | null>(null);
 
   useEffect(() => {
     const supabase = createClient();
@@ -276,6 +280,26 @@ export default function RecipeDetailPage({ params }: RecipeDetailPageProps) {
     };
   }, [id]);
 
+  useEffect(() => {
+    if (!recipeData?.recipe) {
+      return;
+    }
+
+    const trackKey = `${recipeData.recipe.id}:${recipeData.recipe.slug}`;
+    if (lastTrackedRecipeViewRef.current === trackKey) {
+      return;
+    }
+
+    lastTrackedRecipeViewRef.current = trackKey;
+    track({
+      name: "recipe_detail_view",
+      props: {
+        recipe_id: recipeData.recipe.id,
+        recipe_slug: recipeData.recipe.slug,
+      },
+    });
+  }, [recipeData]);
+
   async function handleStar() {
     if (!recipeData) return;
 
@@ -301,6 +325,13 @@ export default function RecipeDetailPage({ params }: RecipeDetailPageProps) {
           }
         : current,
     );
+    track({
+      name: "recipe_star",
+      props: {
+        recipe_id: recipeData.recipe.id,
+        starred: payload.data.starred,
+      },
+    });
     toast(payload.data.starred ? "已加入你的 Star 清单" : "已取消 Star", { variant: "success" });
   }
 
@@ -342,12 +373,26 @@ export default function RecipeDetailPage({ params }: RecipeDetailPageProps) {
       throw new Error(payload.error?.message ?? "Fork 失败");
     }
 
+    track({
+      name: "recipe_fork",
+      props: {
+        recipe_id: recipeData.recipe.id,
+      },
+    });
     toast("已 Fork 到你的草稿库", { variant: "success" });
     router.push(`/recipes/${payload.data.recipe.slug || payload.data.recipe.id}`);
   }
 
   async function handleExecute() {
     if (!recipeData) return;
+
+    track({
+      name: "recipe_execute_click",
+      props: {
+        recipe_id: recipeData.recipe.id,
+        recipe_slug: recipeData.recipe.slug,
+      },
+    });
 
     const response = await fetch(`/api/recipes/${recipeData.recipe.id}/execute`, {
       method: "POST",
@@ -374,6 +419,21 @@ export default function RecipeDetailPage({ params }: RecipeDetailPageProps) {
     toast("执行任务已创建，可以开始轮询 execution 状态了", { variant: "success" });
   }
 
+  function handlePublished() {
+    setRecipeData((current) =>
+      current
+        ? {
+            ...current,
+            recipe: {
+              ...current.recipe,
+              status: "published",
+              visibility: "public",
+            },
+          }
+        : current,
+    );
+  }
+
   if (loading) {
     return <RecipeDetailSkeleton />;
   }
@@ -386,12 +446,17 @@ export default function RecipeDetailPage({ params }: RecipeDetailPageProps) {
   const commandPreview = pendingExecution?.commandPreview ?? `openclaw run recipe:${recipe.slug}`;
   const readmeBlocks = renderReadmeBlocks(recipe.readme_json);
   const fallbackReadmeRecipe = readmeBlocks.length > 0 ? recipe : { ...recipe, readme_json: recipe.readme_md || recipe.description };
+  const isAuthor = Boolean(userId && recipe.author_id === userId);
 
   return (
     <main className="mx-auto min-h-screen max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
       <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_360px]">
         <div className="space-y-8">
-          <RecipeHeader recipe={recipe} forkSource={forkSource} />
+          <RecipeHeader
+            recipe={recipe}
+            forkSource={forkSource}
+            actions={<RecipeShareButton recipeId={recipe.id} recipeTitle={recipe.title} recipeSlug={recipe.slug} />}
+          />
 
           <RecipeReadmeSection recipe={fallbackReadmeRecipe} />
 
@@ -409,6 +474,15 @@ export default function RecipeDetailPage({ params }: RecipeDetailPageProps) {
           commandPreview={commandPreview}
           pendingExecution={pendingExecution}
           disabledActions={!userId}
+          authorActions={
+            isAuthor ? (
+              <RecipePublishButton
+                recipeId={recipe.id}
+                currentStatus={recipe.status}
+                onPublished={handlePublished}
+              />
+            ) : undefined
+          }
           onExecute={handleExecute}
           onStar={handleStar}
           onFork={handleFork}

@@ -13,28 +13,6 @@ export interface ApiError {
 export type VideoStatus = "processing" | "ready" | "published" | "rejected" | "failed";
 export type PlanType = "free" | "pro" | "studio";
 
-export interface UploadRequest {
-  title: string;
-  description?: string;
-  tags?: string[];
-  video_url: string;
-  thumbnail_url?: string;
-  idempotency_key?: string;
-  transcript?: string;
-  summary?: string;
-  language?: string;
-  cites?: Array<{
-    video_id: string;
-    context?: string;
-  }>;
-}
-
-export interface UploadResponse {
-  video_id: string;
-  url: string;
-  status?: "processing";
-}
-
 export interface Creator {
   id: string;
   owner_id: string;
@@ -71,22 +49,6 @@ export interface CreateCreatorResponse {
   api_key?: string;
   channel_url?: string;
   message: string;
-}
-
-export interface VideoInsert {
-  creator_id: string;
-  title: string;
-  description: string;
-  tags: string[];
-  raw_video_url: string;
-  thumbnail_url: string | null;
-  transcript: string | null;
-  summary: string | null;
-  language: string;
-  cloudflare_video_id: string;
-  cloudflare_playback_url: string;
-  status: "processing";
-  source: "upload";
 }
 
 export interface Video {
@@ -150,19 +112,6 @@ export interface ModerationResult {
   categories: string[];
   category_scores?: Partial<ModerationCategoryScores>;
   raw: unknown;
-}
-
-export interface CloudflareUploadResult {
-  uid: string;
-  playbackUrl: string;
-}
-
-export interface CloudflareVideoStatus {
-  uid: string;
-  readyToStream: boolean;
-  state: string;
-  duration: number | null;
-  thumbnail: string | null;
 }
 
 export type ViewerType = "ai" | "human";

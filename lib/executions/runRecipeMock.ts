@@ -1,4 +1,4 @@
-import { getSupabaseAdminClient } from "@/lib/supabase/server";
+import { updateExecutionById } from "@/lib/executions/updateExecution";
 
 type ExecutionStatus =
   | "running"
@@ -28,32 +28,6 @@ function sleep(delayMs: number): Promise<void> {
   });
 }
 
-async function updateExecution(
-  executionId: string,
-  payload: {
-    status: ExecutionStatus;
-    progress_pct: number;
-    output_external_url?: string | null;
-    output_thumbnail_url?: string | null;
-    output_platform?: string | null;
-    error_message?: string | null;
-  },
-): Promise<void> {
-  const admin = getSupabaseAdminClient();
-  const { error } = await admin
-    .from("recipe_executions")
-    .update({
-      ...payload,
-      progress: payload.progress_pct,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", executionId);
-
-  if (error) {
-    throw new Error(`更新 execution 失败: ${error.message}`);
-  }
-}
-
 /**
  * 在同一个 Node.js 进程内模拟 Recipe 执行过程。
  * 说明：这是第一期闭环验证用 mock，不依赖队列。
@@ -69,7 +43,7 @@ export async function runRecipeMock(executionId: string): Promise<void> {
       previousDelay = step.delayMs;
 
       if (step.status === "success") {
-        await updateExecution(executionId, {
+        await updateExecutionById(executionId, {
           status: "success",
           progress_pct: 100,
           output_external_url: `https://www.bilibili.com/video/mock-${seed}`,
@@ -81,7 +55,7 @@ export async function runRecipeMock(executionId: string): Promise<void> {
         return;
       }
 
-      await updateExecution(executionId, {
+      await updateExecutionById(executionId, {
         status: step.status,
         progress_pct: step.progressPct,
         error_message: null,
@@ -91,7 +65,7 @@ export async function runRecipeMock(executionId: string): Promise<void> {
   } catch (error) {
     console.error(`[runRecipeMock] execution ${executionId} failed:`, error);
     try {
-      await updateExecution(executionId, {
+      await updateExecutionById(executionId, {
         status: "failed",
         progress_pct: 100,
         error_message: error instanceof Error ? error.message : "执行流程异常终止",

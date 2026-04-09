@@ -1,38 +1,28 @@
 "use client";
 
-import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
-import { Search, Check } from "lucide-react";
+import { Search } from "lucide-react";
 
-import { GlassCard } from "@/components/design/glass-card";
-import { formatViewCount } from "@/lib/format";
+import { RecipeCard } from "@/components/recipes";
+import type { Recipe } from "@/types/recipe";
 
-interface SearchResult {
-  video_id: string;
-  title: string;
-  creator_name: string;
-  creator_id: string;
-  match_type: string;
-  snippet: string;
-  relevance_score: number;
-  created_at: string;
-  view_count: number;
+interface RecipeAuthor {
+  id: string;
+  username: string;
+  display_name: string | null;
+  avatar_url: string | null;
+  author_type: "human" | "ai_agent";
 }
 
 interface SearchResponse {
-  query: string;
-  count: number;
-  results: SearchResult[];
+  success: boolean;
+  data?: {
+    recipes: Array<Recipe & { author: RecipeAuthor }>;
+    total: number;
+    hasMore: boolean;
+  };
 }
-
-const MATCH_TYPE_LABEL: Record<string, string> = {
-  semantic: "语义匹配",
-  title: "标题匹配",
-  transcript: "字幕匹配",
-  summary: "摘要匹配",
-  tags: "标签匹配",
-};
 
 function SearchContent() {
   const searchParams = useSearchParams();
@@ -40,7 +30,7 @@ function SearchContent() {
   const initialQuery = searchParams.get("q") ?? "";
 
   const [query, setQuery] = useState(initialQuery);
-  const [results, setResults] = useState<SearchResult[]>([]);
+  const [results, setResults] = useState<Array<Recipe & { author: RecipeAuthor }>>([]);
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -50,12 +40,10 @@ function SearchContent() {
     setLoading(true);
     setSearched(true);
     try {
-      const res = await fetch(
-        `/api/search?q=${encodeURIComponent(q.trim())}&limit=30`,
-      );
+      const res = await fetch(`/api/recipes?q=${encodeURIComponent(q.trim())}&limit=30&sort=trending`);
       if (res.ok) {
-        const data: SearchResponse = await res.json();
-        setResults(data.results);
+        const data = (await res.json()) as SearchResponse;
+        setResults(data.success && data.data ? data.data.recipes : []);
       }
     } catch {
       // 静默失败
@@ -92,7 +80,7 @@ function SearchContent() {
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="搜索视频、频道、标签…"
+          placeholder="搜索 Recipe、作者、工作流…"
           className="w-full rounded-xl border border-zinc-700 bg-zinc-900/80 py-3.5 pl-12 pr-4 text-zinc-100 placeholder:text-zinc-500 outline-none transition focus:border-cyan-500/50"
         />
       </form>
@@ -106,52 +94,25 @@ function SearchContent() {
         ) : searched && results.length === 0 ? (
           <div className="py-20 text-center">
             <p className="text-lg text-zinc-400">未找到相关结果</p>
-            <p className="mt-1 text-sm text-zinc-600">试试其他关键词？</p>
+            <p className="mt-1 text-sm text-zinc-600">试试搜索一个主题、作者或工作流？</p>
           </div>
         ) : results.length > 0 ? (
           <div className="space-y-3">
             <p className="text-sm text-zinc-500">
               找到 {results.length} 个结果
             </p>
-            {results.map((r) => (
-              <Link key={r.video_id} href={`/v/${r.video_id}`}>
-                <GlassCard className="block transition hover:border-zinc-600">
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="min-w-0 flex-1">
-                      <h3 className="truncate font-medium text-zinc-100">
-                        {r.title}
-                      </h3>
-                      <p className="mt-1 text-sm text-zinc-400">
-                        <Link
-                          href={`/c/${r.creator_id}`}
-                          className="text-cyan-400/80 hover:underline"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          {r.creator_name}
-                        </Link>
-                        <span className="mx-2 text-zinc-600">·</span>
-                        {formatViewCount(r.view_count)} 次观看
-                      </p>
-                      {r.snippet && (
-                        <p className="mt-1.5 line-clamp-2 text-sm text-zinc-500">
-                          {r.snippet}
-                        </p>
-                      )}
-                    </div>
-                    <span className="shrink-0 rounded-md bg-zinc-800 px-2 py-0.5 text-xs text-zinc-500">
-                      {MATCH_TYPE_LABEL[r.match_type] ?? r.match_type}
-                    </span>
-                  </div>
-                </GlassCard>
-              </Link>
-            ))}
+            <div className="grid gap-4 md:grid-cols-2">
+              {results.map((recipe) => (
+                <RecipeCard key={recipe.id} recipe={recipe} />
+              ))}
+            </div>
           </div>
         ) : !searched ? (
           <div className="py-16 text-center text-zinc-500">
             <Search className="mx-auto mb-3 h-10 w-10 text-zinc-700" />
-            <p>输入关键词搜索视频内容</p>
+            <p>输入关键词搜索 Recipe</p>
             <p className="mt-1 text-sm text-zinc-600">
-              支持标题、字幕、标签、语义搜索
+              支持按标题、说明和 README 关键词搜索
             </p>
           </div>
         ) : null}

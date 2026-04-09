@@ -1,6 +1,6 @@
 "use client";
 
-import { useDeferredValue, useEffect, useState, useTransition } from "react";
+import { useDeferredValue, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
 import { AuroraButton } from "@/components/design/aurora-button";
@@ -10,6 +10,8 @@ import { RecipeCard, RecipeCardSkeleton } from "@/components/recipes";
 import { RecipeFilters } from "@/components/recipes/RecipeFilters";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
+import { track } from "@/lib/analytics";
+import { createClient } from "@/lib/supabase/client";
 import type { Recipe } from "@/types/recipe";
 
 interface RecipeAuthor {
@@ -110,10 +112,33 @@ export default function RecipesPage() {
   const [total, setTotal] = useState(0);
   const [hasMore, setHasMore] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const lastTrackedViewKeyRef = useRef<string | null>(null);
+  const listSectionRef = useRef<HTMLElement | null>(null);
+  const [userId, setUserId] = useState<string | null>(null);
+  const [showGuide, setShowGuide] = useState(false);
 
   useEffect(() => {
     setSearchInput(currentQuery);
   }, [currentQuery]);
+
+  useEffect(() => {
+    const supabase = createClient();
+    let active = true;
+
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (!active) {
+        return;
+      }
+
+      const seenGuide = window.localStorage.getItem("botbili_recipes_guide_seen") === "true";
+      setUserId(user?.id ?? null);
+      setShowGuide(!seenGuide || !user?.id);
+    });
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   useEffect(() => {
     const normalizedInput = deferredSearchInput.trim();
@@ -197,6 +222,44 @@ export default function RecipesPage() {
 
     return () => controller.abort();
   }, [currentCategory, currentDifficulty, currentPlatformsKey, currentQuery, currentSort]);
+
+  useEffect(() => {
+    if (loading || loadError) {
+      return;
+    }
+
+    const filters: Record<string, string> = {};
+    if (currentQuery.trim()) {
+      filters.q = currentQuery.trim();
+    }
+    if (currentCategory) {
+      filters.category = currentCategory;
+    }
+    if (currentDifficulty) {
+      filters.difficulty = currentDifficulty;
+    }
+    if (currentPlatforms.length > 0) {
+      filters.platforms = currentPlatforms.join(",");
+    }
+
+    const trackingKey = JSON.stringify({
+      sort: currentSort,
+      filters,
+    });
+
+    if (lastTrackedViewKeyRef.current === trackingKey) {
+      return;
+    }
+
+    lastTrackedViewKeyRef.current = trackingKey;
+    track({
+      name: "recipe_list_view",
+      props: {
+        sort: currentSort,
+        filters,
+      },
+    });
+  }, [currentCategory, currentDifficulty, currentPlatforms, currentQuery, currentSort, loadError, loading]);
 
   function updateUrl(nextValues: {
     sort?: string;
@@ -336,6 +399,42 @@ export default function RecipesPage() {
     }
   }
 
+  function handleGuideBrowseTrending() {
+    window.localStorage.setItem("botbili_recipes_guide_seen", "true");
+    setShowGuide(false);
+
+    const nextParams = new URLSearchParams(searchParamsString);
+    nextParams.set("sort", "trending");
+
+    startRouteTransition(() => {
+      router.push(`/recipes?${nextParams.toString()}`, { scroll: false });
+    });
+
+    window.setTimeout(() => {
+      listSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 80);
+  }
+
+  function handleClearFilters() {
+    const nextParams = new URLSearchParams();
+    if (currentSort && currentSort !== "trending") {
+      nextParams.set("sort", "trending");
+    }
+
+    setSearchInput("");
+    startRouteTransition(() => {
+      router.push(`/recipes${nextParams.toString() ? `?${nextParams.toString()}` : ""}`, { scroll: false });
+    });
+  }
+
+  const hasActiveFilters = Boolean(
+    currentQuery.trim() || currentCategory || currentDifficulty || currentPlatforms.length > 0,
+  );
+  const createRecipeHref = useMemo(() => {
+    const query = currentQuery.trim();
+    return query ? `/recipes/new?title=${encodeURIComponent(query)}` : "/recipes/new";
+  }, [currentQuery]);
+
   const isBusy = loading || isRouting;
 
   return (
@@ -367,90 +466,133 @@ export default function RecipesPage() {
           </div>
         </section>
 
-        <RecipeFilters
-          query={searchInput}
-          sort={currentSort}
-          category={currentCategory}
-          difficulty={currentDifficulty}
-          platforms={currentPlatforms}
-          onQueryChange={setSearchInput}
-          onSortChange={(value) => updateUrl({ sort: value })}
-          onCategoryChange={(value) => updateUrl({ category: value })}
-          onDifficultyChange={(value) => updateUrl({ difficulty: value })}
-          onPlatformToggle={(value) => {
-            const nextPlatforms = currentPlatforms.includes(value)
-              ? currentPlatforms.filter((platform) => platform !== value)
-              : [...currentPlatforms, value];
-            updateUrl({ platforms: nextPlatforms });
-          }}
-        />
-
-        {loadError ? (
-          <GlassCard className="space-y-4 text-center">
-            <div className="space-y-2">
-              <p className="text-lg font-semibold text-zinc-100">Recipe 广场暂时没加载出来</p>
-              <p className="text-sm text-zinc-500">{loadError}</p>
-            </div>
-            <Button type="button" variant="outline" className="border-zinc-700 bg-zinc-950/70" onClick={() => router.refresh()}>
-              重新加载
+        {showGuide ? (
+          <GlassCard className="flex flex-col gap-3 border-cyan-500/20 bg-cyan-500/5 py-4 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm text-zinc-200">
+              👋 第一次来？先执行一个别人写好的 Recipe，看看 AI 视频是怎么生产的。
+            </p>
+            <Button
+              type="button"
+              variant="outline"
+              className="border-cyan-500/30 bg-zinc-950/70 text-cyan-200 hover:border-cyan-400/40 hover:bg-zinc-900"
+              onClick={handleGuideBrowseTrending}
+            >
+              浏览热门 Recipe ↓
             </Button>
           </GlassCard>
-        ) : isBusy ? (
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {Array.from({ length: 6 }).map((_, index) => (
-              <RecipeCardSkeleton key={index} />
-            ))}
-          </div>
-        ) : recipes.length > 0 ? (
-          <section className="space-y-6">
-            <div className="flex items-center justify-between gap-4">
-              <div className="text-sm text-zinc-500">
-                共 <span className="font-medium text-zinc-200">{total}</span> 个 Recipe
-              </div>
-              <div className="text-xs text-zinc-600">像 GitHub Trending 一样，先看信号，再决定要不要 Fork</div>
-            </div>
+        ) : null}
 
+        <section ref={listSectionRef} className="space-y-6">
+          <RecipeFilters
+            query={searchInput}
+            sort={currentSort}
+            category={currentCategory}
+            difficulty={currentDifficulty}
+            platforms={currentPlatforms}
+            onQueryChange={setSearchInput}
+            onSortChange={(value) => updateUrl({ sort: value })}
+            onCategoryChange={(value) => updateUrl({ category: value })}
+            onDifficultyChange={(value) => updateUrl({ difficulty: value })}
+            onPlatformToggle={(value) => {
+              const nextPlatforms = currentPlatforms.includes(value)
+                ? currentPlatforms.filter((platform) => platform !== value)
+                : [...currentPlatforms, value];
+              updateUrl({ platforms: nextPlatforms });
+            }}
+          />
+
+          {loadError ? (
+            <GlassCard className="space-y-4 text-center">
+              <div className="space-y-2">
+                <p className="text-lg font-semibold text-zinc-100">Recipe 广场暂时没加载出来</p>
+                <p className="text-sm text-zinc-500">{loadError}</p>
+              </div>
+              <Button type="button" variant="outline" className="border-zinc-700 bg-zinc-950/70" onClick={() => router.refresh()}>
+                重新加载
+              </Button>
+            </GlassCard>
+          ) : isBusy ? (
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-              {recipes.map((recipe) => (
-                <RecipeCard
-                  key={recipe.id}
-                  recipe={recipe}
-                  isStarred={starredMap[recipe.id] ?? false}
-                  onStarToggle={handleStarToggle}
-                />
+              {Array.from({ length: 6 }).map((_, index) => (
+                <RecipeCardSkeleton key={index} />
               ))}
             </div>
+          ) : recipes.length > 0 ? (
+            <section className="space-y-6">
+              <div className="flex items-center justify-between gap-4">
+                <div className="text-sm text-zinc-500">
+                  共 <span className="font-medium text-zinc-200">{total}</span> 个 Recipe
+                </div>
+                <div className="text-xs text-zinc-600">像 GitHub Trending 一样，先看信号，再决定要不要 Fork</div>
+              </div>
 
-            {hasMore ? (
-              <div className="flex justify-center">
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="border-zinc-700 bg-zinc-950/70 px-6"
-                  onClick={loadMore}
-                  disabled={loadingMore}
-                >
-                  {loadingMore ? "加载中…" : "加载更多"}
-                </Button>
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                {recipes.map((recipe) => (
+                  <RecipeCard
+                    key={recipe.id}
+                    recipe={recipe}
+                    isStarred={starredMap[recipe.id] ?? false}
+                    onStarToggle={handleStarToggle}
+                  />
+                ))}
               </div>
-            ) : null}
-          </section>
-        ) : (
-          <GlassCard className="py-16 text-center">
-            <div className="space-y-4">
-              <div className="text-5xl">🧪</div>
-              <div className="space-y-2">
-                <p className="text-2xl font-semibold text-zinc-100">还没有 Recipe，来创建第一个</p>
-                <p className="mx-auto max-w-xl text-sm leading-7 text-zinc-500">
-                  先把一个稳定可复用的视频流程写成 Recipe Repo，再让更多人 Star、Fork、执行和共创。
-                </p>
+
+              {hasMore ? (
+                <div className="flex justify-center">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="border-zinc-700 bg-zinc-950/70 px-6"
+                    onClick={loadMore}
+                    disabled={loadingMore}
+                  >
+                    {loadingMore ? "加载中…" : "加载更多"}
+                  </Button>
+                </div>
+              ) : null}
+            </section>
+          ) : hasActiveFilters ? (
+            <GlassCard className="py-16 text-center">
+              <div className="space-y-4">
+                <div className="text-5xl">🔎</div>
+                <div className="space-y-2">
+                  <p className="text-2xl font-semibold text-zinc-100">没找到匹配的 Recipe</p>
+                  <p className="mx-auto max-w-xl text-sm leading-7 text-zinc-500">
+                    换个关键词，或者成为第一个发布这类 Recipe 的人。
+                  </p>
+                </div>
+                <div className="flex flex-col items-center justify-center gap-3 sm:flex-row">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="border-zinc-700 bg-zinc-950/70"
+                    onClick={handleClearFilters}
+                  >
+                    清除筛选
+                  </Button>
+                  <AuroraButton href={createRecipeHref} size="lg">
+                    创建这个 Recipe
+                  </AuroraButton>
+                </div>
               </div>
-              <AuroraButton href="/recipes/new" size="lg">
-                去创建 Recipe
-              </AuroraButton>
-            </div>
-          </GlassCard>
-        )}
+            </GlassCard>
+          ) : (
+            <GlassCard className="py-16 text-center">
+              <div className="space-y-4">
+                <div className="text-5xl">🧪</div>
+                <div className="space-y-2">
+                  <p className="text-2xl font-semibold text-zinc-100">还没有 Recipe，来创建第一个</p>
+                  <p className="mx-auto max-w-xl text-sm leading-7 text-zinc-500">
+                    先把一个稳定可复用的视频流程写成 Recipe Repo，再让更多人 Star、Fork、执行和共创。
+                  </p>
+                </div>
+                <AuroraButton href="/recipes/new" size="lg">
+                  去创建 Recipe
+                </AuroraButton>
+              </div>
+            </GlassCard>
+          )}
+        </section>
       </div>
     </main>
   );

@@ -43,6 +43,9 @@ export interface AgentCard {
     accepts_citations: boolean;
     accepts_evaluations: boolean;
     webhook_enabled: boolean;
+    recipe_discovery: boolean;
+    recipe_execution: boolean;
+    recipe_publishing: boolean;
   };
   endpoints: {
     feed: string;
@@ -319,6 +322,9 @@ export async function generateAgentCard(identifier: string, baseUrl: string): Pr
       accepts_citations: true,
       accepts_evaluations: true,
       webhook_enabled: true,
+      recipe_discovery: true,
+      recipe_execution: true,
+      recipe_publishing: true,
     },
     endpoints: {
       feed: `${baseUrl}/feed/${creator.slug}.json`,

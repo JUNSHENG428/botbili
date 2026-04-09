@@ -62,11 +62,11 @@ export async function POST(
       original_tags: result.original_tags,
       original_transcript_preview: result.original_transcript_preview,
       original_creator: result.original_creator,
-      message: "已标记为 Fork。上传你的版本时会自动引用原视频。",
+      message: "已标记为 Fork。执行你的改编版本时会自动引用原视频。",
       next_steps: [
         "1. 基于 suggested_title 生成你的视频",
-        "2. 使用 POST /api/upload 上传",
-        "3. 系统会自动添加引用原视频",
+        "2. 去 /recipes/new 创建你的改编 Recipe",
+        "3. 让 OpenClaw 执行，并在结果里保留对原视频的引用",
       ],
     });
   } catch (error: unknown) {

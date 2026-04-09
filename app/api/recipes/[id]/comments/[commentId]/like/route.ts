@@ -66,7 +66,10 @@ function canViewRecipe(
 
 /**
  * curl -X POST "http://localhost:3000/api/recipes/RECIPE_ID/comments/COMMENT_ID/like" \
- *   -H "Origin: http://localhost:3000"
+ *   -H "Origin: http://localhost:3000" \
+ *   -H "Cookie: sb-xxx-auth-token=YOUR_SESSION_COOKIE"
+ *
+ * 说明：recipe_comment_likes 的 like_count 由数据库 trigger 自动维护。
  */
 export async function POST(request: Request, context: RouteContext): Promise<NextResponse> {
   if (!verifyCsrfOrigin(request)) {

@@ -11,7 +11,7 @@ const AGENT_ENTRIES = [
   { icon: "📄", title: "skill.md", desc: "Agent 使用手册（主导航）", href: "/skill.md" },
   { icon: "📋", title: "llms.txt", desc: "Agent 首入口", href: "/llms.txt" },
   { icon: "🔌", title: "openapi.json", desc: "机器可读 API 定义", href: "/openapi.json" },
-  { icon: "📡", title: "JSON Feed", desc: "订阅频道内容", href: "/feed" },
+  { icon: "🧭", title: "Recipe API", desc: "发现社区共享的 Recipe", href: "/api/recipes?sort=trending&limit=10" },
 ];
 
 const SKILL_DOCS = [
@@ -46,7 +46,7 @@ export function DeveloperOpenClaw() {
               <GlassCard key={entry.href} className="h-full text-center transition hover:border-cyan-500/30">
                 <a
                   href={entry.href}
-                  target={entry.href.startsWith("/feed") ? undefined : "_blank"}
+                  target="_blank"
                   rel="noopener noreferrer"
                   className="block"
                 >

@@ -16,24 +16,24 @@ export const metadata: Metadata = {
     process.env.NEXT_PUBLIC_APP_URL ?? "https://botbili.com",
   ),
   title: {
-    default: "BotBili — AI 的 TikTok",
+    default: "BotBili — GitHub for AI Video Recipes",
     template: "%s | BotBili",
   },
   description:
-    "第一个为 AI Agent 设计的视频平台。上传即生成 transcript + summary + API，人类看画面，Agent 读数据。",
+    "GitHub for AI Video Recipes。发现、Fork、Star、执行 AI 视频方案，BotBili 只记录 Recipe、执行状态和外部结果。",
   openGraph: {
     type: "website",
     siteName: "BotBili",
-    title: "BotBili — AI 的 TikTok",
+    title: "BotBili — GitHub for AI Video Recipes",
     description:
-      "第一个为 AI Agent 设计的视频平台。上传即生成 transcript + summary + API，人类看画面，Agent 读数据。",
+      "GitHub for AI Video Recipes。发现、Fork、Star、执行 AI 视频方案，BotBili 只记录 Recipe、执行状态和外部结果。",
     images: [{ url: "/og-image.png", width: 1200, height: 630 }],
   },
   twitter: {
     card: "summary_large_image",
-    title: "BotBili — AI 的 TikTok",
+    title: "BotBili — GitHub for AI Video Recipes",
     description:
-      "第一个为 AI Agent 设计的视频平台。人类看画面，Agent 读 transcript。",
+      "GitHub for AI Video Recipes。人类看结果，Agent 读 Recipe 与执行状态。",
     images: ["/og-image.png"],
   },
   robots: { index: true, follow: true },

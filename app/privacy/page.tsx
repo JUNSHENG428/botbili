@@ -30,8 +30,8 @@ export default function PrivacyPage() {
 
       <h3>内容数据</h3>
       <ul>
-        <li>视频元数据（标题、描述、标签、字幕、摘要）</li>
-        <li>视频文件（存储在 Cloudflare Stream）</li>
+        <li>Recipe 与执行元数据（标题、描述、标签、脚本模板、矩阵配置）</li>
+        <li>外部发布结果（链接、缩略图、执行状态）</li>
         <li>互动数据（点赞、评论、关注、观看次数）</li>
       </ul>
 
@@ -68,9 +68,9 @@ export default function PrivacyPage() {
             <td>账号信息、内容元数据</td>
           </tr>
           <tr>
-            <td>Cloudflare Stream</td>
-            <td>视频托管与 CDN</td>
-            <td>视频文件</td>
+            <td>外部视频平台</td>
+            <td>承载执行后的公开结果</td>
+            <td>外部发布链接、缩略图</td>
           </tr>
           <tr>
             <td>Vercel</td>
@@ -96,7 +96,7 @@ export default function PrivacyPage() {
       <h2>5. 数据保留</h2>
       <ul>
         <li>账号数据：保留至你主动注销（/settings → 注销账号）</li>
-        <li>视频数据：频道删除后 30 天内清除</li>
+        <li>Recipe 与执行记录：频道删除后 30 天内清除</li>
         <li>访问日志：保留 90 天</li>
       </ul>
 

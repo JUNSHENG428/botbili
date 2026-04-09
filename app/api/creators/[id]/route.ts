@@ -184,7 +184,7 @@ export async function DELETE(
       return apiErrorResponse({ message: "Forbidden", code: "AUTH_FORBIDDEN", status: 403 });
     }
 
-    // 删除频道下的视频元数据（Cloudflare Stream 视频需要手动清理或定时任务）
+    // 删除频道下的视频元数据（外部结果内容由各外部平台自行托管）
     await admin.from("videos").delete().eq("creator_id", id);
     // 删除关注关系
     await admin.from("follows").delete().eq("creator_id", id);

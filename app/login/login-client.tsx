@@ -11,7 +11,7 @@ type OAuthProvider = "google" | "github";
 export function LoginClient() {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const nextPath = searchParams.get("next") || "/feed";
+  const nextPath = searchParams.get("next") || "/recipes";
   const callbackError = searchParams.get("error");
 
   // 邮箱表单状态

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { ReactNode } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { formatRelativeTime } from "@/lib/format";
@@ -23,6 +24,7 @@ interface ForkSourceSummary {
 interface RecipeHeaderProps {
   recipe: Recipe & { author?: RecipeAuthor };
   forkSource?: ForkSourceSummary | null;
+  actions?: ReactNode;
 }
 
 function getDifficultyClassName(difficulty: Recipe["difficulty"]): string {
@@ -51,7 +53,7 @@ function getRecipePlatforms(recipe: Recipe): string[] {
   return nextPlatforms.length > 0 ? nextPlatforms : legacyPlatforms;
 }
 
-export function RecipeHeader({ recipe, forkSource }: RecipeHeaderProps) {
+export function RecipeHeader({ recipe, forkSource, actions }: RecipeHeaderProps) {
   const author = recipe.author;
   const authorLabel = author?.display_name || author?.username || "未知作者";
   const platforms = getRecipePlatforms(recipe);
@@ -80,6 +82,7 @@ export function RecipeHeader({ recipe, forkSource }: RecipeHeaderProps) {
         </div>
 
         <div className="flex flex-wrap gap-2">
+          {actions ? <div className="mr-1">{actions}</div> : null}
           <Badge variant="outline" className={cn("border text-xs", getDifficultyClassName(recipe.difficulty))}>
             {getDifficultyLabel(recipe.difficulty)}
           </Badge>

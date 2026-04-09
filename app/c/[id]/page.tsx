@@ -56,6 +56,7 @@ export default async function CreatorPage({ params }: CreatorPageProps) {
     durationSeconds: video.duration_seconds,
     coverUrl: video.thumbnail_url,
     createdAt: video.created_at,
+    externalUrl: video.raw_video_url,
   }));
 
   const totalViews = videos.reduce((sum, v) => sum + v.view_count, 0);

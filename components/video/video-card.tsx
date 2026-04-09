@@ -1,5 +1,3 @@
-import Link from "next/link";
-
 import { formatDuration, formatRelativeTime, formatViewCount } from "@/lib/format";
 import type { VideoCardData } from "./types";
 
@@ -9,21 +7,18 @@ export interface VideoCardProps {
 }
 
 export function VideoCard({ video, className }: VideoCardProps) {
-  const { id, title, creatorName, views, durationSeconds, createdAt, coverUrl } = video;
+  const { title, creatorName, views, durationSeconds, createdAt, coverUrl, externalUrl } = video;
+  const cardClassName = [
+    "group block overflow-hidden rounded-xl border border-zinc-800 bg-zinc-900/80",
+    "transition-colors hover:border-zinc-700 focus-visible:outline-none",
+    "focus-visible:ring-2 focus-visible:ring-zinc-500 focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-950",
+    className,
+  ]
+    .filter(Boolean)
+    .join(" ");
 
-  return (
-    <Link
-      href={`/v/${id}`}
-      className={[
-        "group block overflow-hidden rounded-xl border border-zinc-800 bg-zinc-900/80",
-        "transition-colors hover:border-zinc-700 focus-visible:outline-none",
-        "focus-visible:ring-2 focus-visible:ring-zinc-500 focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-950",
-        className,
-      ]
-        .filter(Boolean)
-        .join(" ")}
-      aria-label={`查看视频：${title}`}
-    >
+  const content = (
+    <>
       <div className="relative aspect-video overflow-hidden bg-zinc-800">
         {coverUrl ? (
           <div
@@ -51,7 +46,27 @@ export function VideoCard({ video, className }: VideoCardProps) {
           {formatViewCount(views)} 次播放{createdAt ? ` · ${formatRelativeTime(createdAt)}` : ""}
         </p>
       </div>
-    </Link>
+    </>
+  );
+
+  if (externalUrl) {
+    return (
+      <a
+        href={externalUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        className={cardClassName}
+        aria-label={`查看外部结果：${title}`}
+      >
+        {content}
+      </a>
+    );
+  }
+
+  return (
+    <article className={cardClassName} aria-label={`查看结果：${title}`}>
+      {content}
+    </article>
   );
 }
 

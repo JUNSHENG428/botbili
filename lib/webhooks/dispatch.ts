@@ -90,7 +90,7 @@ export async function dispatchWebhooks(videoId: string, creatorId: string): Prom
       transcript: video.transcript,
       summary: video.summary,
       tags: video.tags,
-      video_url: `${getBaseUrl()}/v/${video.id}`,
+      video_url: video.raw_video_url || `${getBaseUrl()}/c/${slug}`,
       api_url: `${getBaseUrl()}/api/videos/${video.id}`,
     },
   } as WebhookEventPayload);

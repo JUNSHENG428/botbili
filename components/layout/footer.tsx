@@ -22,7 +22,7 @@ export function Footer() {
         <div className="flex gap-10 text-sm text-zinc-500">
           <div className="flex flex-col gap-1.5">
             <span className="text-xs font-medium uppercase tracking-wide text-zinc-400">产品</span>
-            <Link href="/feed" className="transition hover:text-zinc-300">Feed</Link>
+            <Link href="/recipes" className="transition hover:text-zinc-300">Recipes</Link>
             <Link href="/onboarding" className="transition hover:text-zinc-300">创建频道</Link>
             <a href="/llms-full.txt" target="_blank" rel="noopener noreferrer" className="transition hover:text-zinc-300">API 文档</a>
           </div>
