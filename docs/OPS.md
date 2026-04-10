@@ -50,28 +50,31 @@ BotBili 当前是 **GitHub for AI Video Recipes**：
 | `WECHAT_TOKEN` | 微信公众号 webhook 验签 | Vercel + `.env.local` | 自行设定 |
 | `DAILY_AGENT_LIMIT` | 每日 Agent 注册名额 | Vercel + `.env.local` | 自行设定 |
 | `ADMIN_EMAIL` | 管理员邮箱 | Vercel + `.env.local` | 自行设定 |
-| `BOTBILI_EXECUTION_DRIVER` | 执行驱动：`mock` / `openclaw` | Vercel + `.env.local` | 自行设定 |
-| `OPENCLAW_EXECUTE_URL` | OpenClaw 任务提交 endpoint | Vercel + `.env.local` | OpenClaw 服务提供 |
-| `OPENCLAW_API_KEY` | OpenClaw 调用凭证 | Vercel + `.env.local` | OpenClaw 服务提供 |
-| `OPENCLAW_CALLBACK_SECRET` | OpenClaw 回调鉴权 token | Vercel + `.env.local` | 自行设定 |
+| `USE_MOCK_EXECUTION` | 执行模式：`true`(mock) / `false`(真实) | Vercel + `.env.local` | 自行设定 |
+| `OPENCLAW_CALLBACK_SECRET` | OpenClaw CLI 回调鉴权 token | Vercel + `.env.local` | 自行设定 |
 
 ### 推荐配置
 
 ```bash
-# Recipe execution driver
-# - mock: 本进程内模拟执行（默认）
-# - openclaw: 转发给外部 OpenClaw 执行器
-BOTBILI_EXECUTION_DRIVER=mock
-OPENCLAW_EXECUTE_URL=
-OPENCLAW_API_KEY=
+# Recipe 执行模式
+# - true: 本地 mock 模式（默认，本地开发用）
+# - false: 真实执行模式，等待 openclaw CLI 主动领取任务
+USE_MOCK_EXECUTION=true
+
+# openclaw CLI 回调验签密钥（botbili 自己生成）
+# openclaw CLI 在 POST /api/executions/{id}/callback 时需带上此值
+# Header: X-BotBili-Callback-Secret: <此值>
 OPENCLAW_CALLBACK_SECRET=
 ```
 
 ### 关键注意事项
 
 - `NEXT_PUBLIC_*` 变量在构建时注入客户端，修改后必须重新部署
-- `SUPABASE_SERVICE_ROLE_KEY`、`OPENCLAW_API_KEY`、`OPENCLAW_CALLBACK_SECRET` 绝不能出现在客户端代码中
-- 如果启用 `openclaw` 驱动，`OPENCLAW_EXECUTE_URL` 与 `OPENCLAW_CALLBACK_SECRET` 必须同时配置
+- `SUPABASE_SERVICE_ROLE_KEY`、`OPENCLAW_CALLBACK_SECRET` 绝不能出现在客户端代码中
+- OpenClaw 架构说明：OpenClaw 是用户本地 Agent，botbili 无法主动连接。正确流程：
+  1. botbili 创建 execution 为 pending 状态
+  2. 用户本地 openclaw CLI 主动 GET /api/executions/{id} 领取任务
+  3. openclaw 本地执行完成后 POST callback 回写结果
 
 ---
 
@@ -313,8 +316,8 @@ curl https://www.botbili.com/api/health
 | 客户端报 `Missing required env` | `NEXT_PUBLIC_*` 变量缺失 | 补齐环境变量并重新部署 |
 | OAuth 登录跳到 localhost | Supabase Site URL 未更新 | 在 Supabase Auth 中改为生产域名 |
 | `/feed` 或 `/recipes` 500 | 服务端基础 URL 或 DB 环境缺失 | 检查 `APP_URL`、Supabase 环境变量 |
-| `CALLBACK_UNAUTHORIZED` | 回调鉴权头错误 | 检查 `Authorization: Bearer {OPENCLAW_CALLBACK_SECRET}` |
-| execution 一直停在 `pending` | OpenClaw 未消费任务或 driver 仍是 `mock` | 检查 `BOTBILI_EXECUTION_DRIVER` 和 `OPENCLAW_EXECUTE_URL` |
+| `CALLBACK_UNAUTHORIZED` | 回调鉴权头错误 | 检查 `X-BotBili-Callback-Secret: {OPENCLAW_CALLBACK_SECRET}` |
+| execution 一直停在 `pending` | OpenClaw CLI 未领取任务或仍在本地执行中 | 检查用户本地 openclaw CLI 是否运行，或查看 `USE_MOCK_EXECUTION` 设置 |
 | execution 进入 `failed` | OpenClaw 或外部平台报错 | 查看 `error_message`，必要时重试 |
 
 ### 8.4 数据库连接排查

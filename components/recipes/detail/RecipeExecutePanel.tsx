@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import type { ReactNode } from "react";
 
@@ -109,12 +109,30 @@ function normalizeExecutionOutput(payload: ExecutionStatusPayload): RecipeExecut
   };
 }
 
-function ExecutionStatusBadge({ executionId }: { executionId: string }) {
+// 计算退避轮询间隔（毫秒）
+function getPollingInterval(elapsedMs: number): number {
+  if (elapsedMs < 30000) {
+    return 2000; // 前30秒：每2秒
+  } else if (elapsedMs < 120000) {
+    return 5000; // 30-120秒：每5秒
+  } else {
+    return 15000; // 120秒以上：每15秒
+  }
+}
+
+function ExecutionStatusBadge({ 
+  executionId, 
+  onRetry 
+}: { 
+  executionId: string;
+  onRetry?: () => void;
+}) {
   const [statusState, setStatusState] = useState<ExecutionStatusPayload | null>(null);
+  const [startTime] = useState(Date.now());
 
   useEffect(() => {
     let active = true;
-    let intervalId: number | null = null;
+    let timeoutId: NodeJS.Timeout | null = null;
 
     async function loadExecutionStatus() {
       try {
@@ -130,27 +148,39 @@ function ExecutionStatusBadge({ executionId }: { executionId: string }) {
 
         setStatusState(payload.data);
 
-        if ((normalizeExecutionOutput(payload.data) || payload.data.status === "failed") && intervalId) {
-          window.clearInterval(intervalId);
-          intervalId = null;
+        // 如果已完成或失败，停止轮询
+        if (payload.data.status === "success" || payload.data.status === "failed") {
+          return;
         }
+
+        // 计算下一次轮询间隔
+        const elapsed = Date.now() - startTime;
+        const nextInterval = getPollingInterval(elapsed);
+        
+        timeoutId = setTimeout(() => {
+          void loadExecutionStatus();
+        }, nextInterval);
       } catch {
-        // 轮询失败不阻塞主流程
+        // 轮询失败不阻塞主流程，继续下一次
+        if (active) {
+          const elapsed = Date.now() - startTime;
+          const nextInterval = getPollingInterval(elapsed);
+          timeoutId = setTimeout(() => {
+            void loadExecutionStatus();
+          }, nextInterval);
+        }
       }
     }
 
     void loadExecutionStatus();
-    intervalId = window.setInterval(() => {
-      void loadExecutionStatus();
-    }, 3000);
 
     return () => {
       active = false;
-      if (intervalId) {
-        window.clearInterval(intervalId);
+      if (timeoutId) {
+        clearTimeout(timeoutId);
       }
     };
-  }, [executionId]);
+  }, [executionId, startTime]);
 
   if (!statusState) {
     return (
@@ -166,29 +196,95 @@ function ExecutionStatusBadge({ executionId }: { executionId: string }) {
   }
 
   const isRunning = statusState.status !== "pending" && statusState.status !== "success" && statusState.status !== "failed";
+  const isCompleted = statusState.status === "success";
+  const isFailed = statusState.status === "failed";
   const output = normalizeExecutionOutput(statusState);
+  const progress = statusState.progress_pct ?? 0;
 
   return (
     <div className="space-y-3">
+      {/* 状态徽章 */}
       <div className="flex flex-wrap items-center gap-2 text-xs">
         <span className={`inline-flex items-center gap-2 rounded-full border px-2.5 py-1 ${getExecutionStatusClassName(statusState.status)}`}>
           {isRunning ? (
             <span className="h-3 w-3 animate-spin rounded-full border border-current border-t-transparent" />
           ) : null}
           {getExecutionStatusLabel(statusState.status)}
-          <span className="tabular-nums opacity-80">{statusState.progress_pct}%</span>
+          <span className="tabular-ums opacity-80">{progress}%</span>
         </span>
-        {statusState.status === "success" && !output ? (
-          <span className="text-zinc-400">执行完成，等待 Agent 回填视频链接</span>
-        ) : null}
         <Link href="/dashboard" className="text-cyan-300 transition hover:text-cyan-200">
           查看执行详情
         </Link>
-        {statusState.error_message ? <span className="text-red-300">{statusState.error_message}</span> : null}
       </div>
-      {output ? (
+
+      {/* 进度条（running 状态） */}
+      {isRunning && (
+        <div className="space-y-1">
+          <div className="w-full bg-white/10 rounded-full h-2 overflow-hidden">
+            <div
+              className="h-full rounded-full transition-all duration-700 ease-out"
+              style={{
+                width: `${progress}%`,
+                background: 'linear-gradient(90deg, #4f98a3, #01696f)',
+              }}
+            />
+          </div>
+          <p className="text-sm text-white/60 tabular-nums">{progress}%</p>
+        </div>
+      )}
+
+      {/* 成功状态：视频预览卡片 */}
+      {isCompleted && statusState.output_external_url && (
+        <div className="mt-4 rounded-xl overflow-hidden border border-white/10">
+          <video
+            src={statusState.output_external_url}
+            controls
+            className="w-full max-h-64 object-contain bg-black"
+          />
+          <div className="p-3 flex items-center justify-between bg-white/5">
+            <span className="text-sm text-white/80">执行完成</span>
+            <a
+              href={statusState.output_external_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-sm text-teal-400 hover:text-teal-300 underline"
+            >
+              在新标签页打开
+            </a>
+          </div>
+        </div>
+      )}
+
+      {/* 成功但未回填链接 */}
+      {isCompleted && !statusState.output_external_url && (
+        <div className="mt-4 p-4 rounded-xl border border-emerald-500/20 bg-emerald-500/10">
+          <p className="text-sm text-emerald-300">执行完成，等待 Agent 回填视频链接</p>
+        </div>
+      )}
+
+      {/* 失败状态：错误信息 + 重试按钮 */}
+      {isFailed && (
+        <div className="mt-4 space-y-2">
+          {statusState.error_message && (
+            <p className="text-sm text-red-400 bg-red-400/10 rounded-lg px-3 py-2">
+              {statusState.error_message}
+            </p>
+          )}
+          {onRetry && (
+            <button
+              onClick={onRetry}
+              className="w-full py-2 rounded-lg border border-white/20 text-sm text-white/80 hover:bg-white/10 transition-colors"
+            >
+              重试
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* 输出卡片（如果有） */}
+      {output && !isCompleted && (
         <RecipeExecutionOutput output={output} status={getOutputStatus(statusState.status)} />
-      ) : null}
+      )}
     </div>
   );
 }
@@ -331,7 +427,10 @@ export function RecipeExecutePanel({
             <p className="text-xs text-zinc-500">
               最近一次执行已创建：<span className="text-zinc-300">{pendingExecution.executionId}</span>
             </p>
-            <ExecutionStatusBadge executionId={pendingExecution.executionId} />
+            <ExecutionStatusBadge 
+              executionId={pendingExecution.executionId} 
+              onRetry={onExecute}
+            />
           </div>
         ) : null}
       </div>

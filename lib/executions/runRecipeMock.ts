@@ -44,24 +44,14 @@ export async function runRecipeMock(
 
   if (!useMock) {
     // 真实 OpenClaw 调用
-    const callbackBase =
-      process.env.NEXT_PUBLIC_APP_URL ?? 'https://botbili.com'
-    
-    await updateExecutionById(executionId, {
-      status: "running",
-      progress_pct: 5,
-      error_message: null,
-    });
-    
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://botbili.com'
     await callOpenClaw({
       recipe_id: recipeId,
       execution_id: executionId,
       inputs,
-      callback_url: `${callbackBase}/api/executions/${executionId}/callback`,
+      callback_url: `${appUrl}/api/executions/${executionId}/callback`,
     })
-    
-    // 状态由 callback 路由接管，这里不做后续 update
-    console.info(`[runRecipe] execution ${executionId} -> dispatched to OpenClaw`);
+    console.info(`[runRecipe] execution ${executionId} -> pending, waiting for openclaw CLI`)
     return
   }
 
