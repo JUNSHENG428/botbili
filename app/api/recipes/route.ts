@@ -207,6 +207,7 @@ export async function GET(request: Request): Promise<NextResponse> {
     const q = searchParams.get("q")?.trim().toLowerCase() ?? "";
     const category = searchParams.get("category")?.trim() ?? "";
     const difficulty = searchParams.get("difficulty")?.trim() ?? "";
+    const tag = searchParams.get("tag")?.trim() ?? "";
     const page = parsePositiveInteger(searchParams.get("page"), DEFAULT_PAGE);
     const limit = parsePositiveInteger(searchParams.get("limit"), DEFAULT_LIMIT, MAX_LIMIT);
     const platforms = normalizePlatforms(searchParams);
@@ -240,7 +241,6 @@ export async function GET(request: Request): Promise<NextResponse> {
         .select("*")
         .eq("status", "published")
         .eq("visibility", "public")
-        .order("created_at", { ascending: false })
         .limit(200);
 
       if (category) {
@@ -255,6 +255,10 @@ export async function GET(request: Request): Promise<NextResponse> {
         trendingQuery = trendingQuery.ilike("title", `%${q}%`);
       }
 
+      if (tag) {
+        trendingQuery = trendingQuery.contains("tags", [tag]);
+      }
+
       if (platforms.length > 0) {
         trendingQuery = trendingQuery.contains("platforms", platforms);
       }
@@ -265,9 +269,12 @@ export async function GET(request: Request): Promise<NextResponse> {
         throw new Error(`加载 Recipe 列表失败: ${error.message}`);
       }
 
-      const sortedRecipes = ((data ?? []) as Recipe[]).sort(
-        (left, right) => calculateRecipeTrendingScore(right) - calculateRecipeTrendingScore(left),
-      );
+      // 排序：featured 置顶，然后是 trending score
+      const sortedRecipes = ((data ?? []) as Recipe[]).sort((left, right) => {
+        const featuredDiff = Number(right.is_featured ?? 0) - Number(left.is_featured ?? 0);
+        if (featuredDiff !== 0) return featuredDiff;
+        return calculateRecipeTrendingScore(right) - calculateRecipeTrendingScore(left);
+      });
 
       total = sortedRecipes.length;
       pagedRecipes = sortedRecipes.slice(start, start + limit);
@@ -298,11 +305,16 @@ export async function GET(request: Request): Promise<NextResponse> {
         query = query.ilike("title", `%${q}%`);
       }
 
+      if (tag) {
+        query = query.contains("tags", [tag]);
+      }
+
       if (platforms.length > 0) {
         query = query.contains("platforms", platforms);
       }
 
       const { data, error, count } = await query
+        .order("is_featured", { ascending: false })
         .order(sortColumn.column, { ascending: sortColumn.ascending })
         .range(start, end);
 

@@ -10,17 +10,25 @@ interface Option {
   value: string;
 }
 
+interface TagItem {
+  tag: string;
+  count: number;
+}
+
 interface RecipeFiltersProps {
   query: string;
   sort: string;
   category: string;
   difficulty: string;
   platforms: string[];
+  tags?: TagItem[];
+  activeTag?: string | null;
   onQueryChange: (value: string) => void;
   onSortChange: (value: string) => void;
   onCategoryChange: (value: string) => void;
   onDifficultyChange: (value: string) => void;
   onPlatformToggle: (value: string) => void;
+  onTagChange?: (tag: string | null) => void;
 }
 
 const SORT_OPTIONS: Option[] = [
@@ -61,11 +69,14 @@ export function RecipeFilters({
   category,
   difficulty,
   platforms,
+  tags = [],
+  activeTag = null,
   onQueryChange,
   onSortChange,
   onCategoryChange,
   onDifficultyChange,
   onPlatformToggle,
+  onTagChange,
 }: RecipeFiltersProps) {
   return (
     <div className="space-y-4 rounded-2xl border border-zinc-800/80 bg-zinc-900/70 p-4 backdrop-blur sm:p-5">
@@ -78,6 +89,39 @@ export function RecipeFilters({
           className="h-11 border-zinc-800 bg-zinc-950/70 pl-10 text-zinc-100 placeholder:text-zinc-500 focus-visible:ring-cyan-400"
         />
       </div>
+
+      {/* 标签云 */}
+      {tags.length > 0 && onTagChange && (
+        <div className="space-y-2">
+          <p className="text-sm text-zinc-400">热门标签</p>
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => onTagChange(null)}
+              className={`px-3 py-1 rounded-full text-sm transition-colors ${
+                activeTag === null
+                  ? 'bg-teal-500/30 text-teal-300 border border-teal-500/50'
+                  : 'bg-white/5 text-white/60 border border-white/10 hover:bg-white/10'
+              }`}
+            >
+              全部
+            </button>
+            {tags.map(({ tag, count }) => (
+              <button
+                key={tag}
+                onClick={() => onTagChange(tag === activeTag ? null : tag)}
+                className={`px-3 py-1 rounded-full text-sm transition-colors ${
+                  activeTag === tag
+                    ? 'bg-teal-500/30 text-teal-300 border border-teal-500/50'
+                    : 'bg-white/5 text-white/60 border border-white/10 hover:bg-white/10'
+                }`}
+              >
+                {tag}
+                <span className="ml-1 text-xs opacity-50">{count}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="space-y-2">
         <p className="text-sm text-zinc-400">排序</p>

@@ -39,6 +39,26 @@ interface GuardedChannel {
   is_active: boolean;
 }
 
+interface DashboardRecipe {
+  id: string;
+  title: string;
+  description: string | null;
+  status: string;
+  is_public: boolean;
+  is_featured: boolean;
+  star_count: number;
+  fork_count: number;
+  author_type: string;
+  created_at: string;
+  updated_at: string;
+  recipe_executions: { count: number }[];
+}
+
+interface ExecutionTrend {
+  date: string;
+  count: number;
+}
+
 interface DashboardResponse {
   creator: {
     id: string;
@@ -59,6 +79,8 @@ interface DashboardResponse {
     total_forks_received: number;
     recent_executions: number;
   };
+  my_recipes?: DashboardRecipe[];
+  execution_trends?: ExecutionTrend[];
   guarded_channels?: GuardedChannel[];
 }
 
@@ -186,6 +208,63 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
       // Recipe KPI 查询失败不影响主流程
     }
 
+    // 获取我的 Recipe 列表（含草稿）
+    let myRecipes: DashboardRecipe[] | undefined;
+    try {
+      const { data: recipeList, error: listError } = await supabase
+        .from("recipes")
+        .select(`
+          id, title, description, status, is_public, is_featured,
+          star_count, fork_count, author_type,
+          created_at, updated_at,
+          recipe_executions(count)
+        `)
+        .eq("author_id", creator.owner_id)
+        .order("updated_at", { ascending: false })
+        .limit(50)
+        .returns<DashboardRecipe[]>();
+
+      if (!listError) {
+        myRecipes = recipeList ?? [];
+      }
+    } catch {
+      // Recipe 列表查询失败不影响主流程
+    }
+
+    // 获取过去 7 天执行趋势
+    let executionTrends: ExecutionTrend[] | undefined;
+    try {
+      const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+      const { data: trendData, error: trendError } = await supabase
+        .from("recipe_executions")
+        .select("created_at")
+        .eq("user_id", creator.owner_id)
+        .gte("created_at", sevenDaysAgo)
+        .order("created_at", { ascending: true });
+
+      if (!trendError && trendData) {
+        // 按日期分组统计
+        const countsByDate = new Map<string, number>();
+        for (let i = 0; i < 7; i++) {
+          const d = new Date();
+          d.setDate(d.getDate() - i);
+          const dateStr = d.toISOString().split("T")[0];
+          countsByDate.set(dateStr, 0);
+        }
+
+        for (const row of trendData) {
+          const dateStr = new Date(row.created_at).toISOString().split("T")[0];
+          countsByDate.set(dateStr, (countsByDate.get(dateStr) ?? 0) + 1);
+        }
+
+        executionTrends = Array.from(countsByDate.entries())
+          .map(([date, count]) => ({ date, count }))
+          .sort((a, b) => a.date.localeCompare(b.date));
+      }
+    } catch {
+      // 执行趋势查询失败不影响主流程
+    }
+
     // 查询当前用户监护的频道
     let guardedChannels: GuardedChannel[] | undefined;
     try {
@@ -218,6 +297,8 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
       },
       videos: videoList,
       recipe_stats: recipeStats,
+      my_recipes: myRecipes,
+      execution_trends: executionTrends,
       guarded_channels: guardedChannels,
     };
 

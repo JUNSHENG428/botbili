@@ -43,6 +43,11 @@ interface ApiResponse<T> {
   };
 }
 
+interface TagItem {
+  tag: string;
+  count: number;
+}
+
 const PAGE_SIZE = 12;
 
 function normalizePlatforms(searchParams: URLSearchParams): string[] {
@@ -59,6 +64,7 @@ function buildRecipesUrl(params: {
   category: string;
   difficulty: string;
   platforms: string[];
+  tag: string | null;
   page: number;
   limit?: number;
 }): string {
@@ -84,6 +90,10 @@ function buildRecipesUrl(params: {
     search.set("platforms", params.platforms.join(","));
   }
 
+  if (params.tag) {
+    search.set("tag", params.tag);
+  }
+
   return `/api/recipes?${search.toString()}`;
 }
 
@@ -99,6 +109,7 @@ export default function RecipesPage() {
   const currentPlatforms = normalizePlatforms(searchParams);
   const currentPlatformsKey = currentPlatforms.join(",");
   const currentQuery = searchParams.get("q") ?? "";
+  const currentTag = searchParams.get("tag") ?? null;
 
   const [searchInput, setSearchInput] = useState(currentQuery);
   const deferredSearchInput = useDeferredValue(searchInput);
@@ -116,6 +127,19 @@ export default function RecipesPage() {
   const listSectionRef = useRef<HTMLElement | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
   const [showGuide, setShowGuide] = useState(false);
+  const [popularTags, setPopularTags] = useState<TagItem[]>([]);
+
+  // 加载热门标签
+  useEffect(() => {
+    let active = true;
+    fetch("/api/recipes/tags?limit=20")
+      .then((res) => res.json())
+      .then((data) => {
+        if (active && data.tags) setPopularTags(data.tags);
+      })
+      .catch((err) => console.error("Failed to load popular tags:", err));
+    return () => { active = false; };
+  }, []);
 
   useEffect(() => {
     setSearchInput(currentQuery);
@@ -182,6 +206,7 @@ export default function RecipesPage() {
             category: currentCategory,
             difficulty: currentDifficulty,
             platforms: currentPlatforms,
+            tag: currentTag,
             page: 1,
           }),
           {
@@ -221,7 +246,7 @@ export default function RecipesPage() {
     void loadFirstPage();
 
     return () => controller.abort();
-  }, [currentCategory, currentDifficulty, currentPlatformsKey, currentQuery, currentSort]);
+  }, [currentCategory, currentDifficulty, currentPlatformsKey, currentQuery, currentSort, currentTag]);
 
   useEffect(() => {
     if (loading || loadError) {
@@ -241,6 +266,9 @@ export default function RecipesPage() {
     if (currentPlatforms.length > 0) {
       filters.platforms = currentPlatforms.join(",");
     }
+    if (currentTag) {
+      filters.tag = currentTag;
+    }
 
     const trackingKey = JSON.stringify({
       sort: currentSort,
@@ -259,13 +287,14 @@ export default function RecipesPage() {
         filters,
       },
     });
-  }, [currentCategory, currentDifficulty, currentPlatforms, currentQuery, currentSort, loadError, loading]);
+  }, [currentCategory, currentDifficulty, currentPlatforms, currentQuery, currentSort, currentTag, loadError, loading]);
 
   function updateUrl(nextValues: {
     sort?: string;
     category?: string;
     difficulty?: string;
     platforms?: string[];
+    tag?: string | null;
   }) {
     const nextParams = new URLSearchParams(searchParamsString);
 
@@ -289,6 +318,14 @@ export default function RecipesPage() {
       }
     }
 
+    if (nextValues.tag !== undefined) {
+      if (nextValues.tag) {
+        nextParams.set("tag", nextValues.tag);
+      } else {
+        nextParams.delete("tag");
+      }
+    }
+
     startRouteTransition(() => {
       router.push(`/recipes${nextParams.toString() ? `?${nextParams.toString()}` : ""}`, {
         scroll: false,
@@ -308,6 +345,7 @@ export default function RecipesPage() {
           category: currentCategory,
           difficulty: currentDifficulty,
           platforms: currentPlatforms,
+          tag: currentTag,
           page: nextPage,
         }),
       );
@@ -428,7 +466,7 @@ export default function RecipesPage() {
   }
 
   const hasActiveFilters = Boolean(
-    currentQuery.trim() || currentCategory || currentDifficulty || currentPlatforms.length > 0,
+    currentQuery.trim() || currentCategory || currentDifficulty || currentPlatforms.length > 0 || currentTag,
   );
   const createRecipeHref = useMemo(() => {
     const query = currentQuery.trim();
@@ -489,6 +527,8 @@ export default function RecipesPage() {
             category={currentCategory}
             difficulty={currentDifficulty}
             platforms={currentPlatforms}
+            tags={popularTags}
+            activeTag={currentTag}
             onQueryChange={setSearchInput}
             onSortChange={(value) => updateUrl({ sort: value })}
             onCategoryChange={(value) => updateUrl({ category: value })}
@@ -499,6 +539,7 @@ export default function RecipesPage() {
                 : [...currentPlatforms, value];
               updateUrl({ platforms: nextPlatforms });
             }}
+            onTagChange={(tag) => updateUrl({ tag })}
           />
 
           {loadError ? (

@@ -6,6 +6,7 @@ import { GlassCard } from "@/components/design/glass-card";
 import { createClient } from "@/lib/supabase/client";
 import { formatRelativeTime } from "@/lib/format";
 import type { RecipeExecutionStatus } from "@/types/recipe";
+import { SparkLine } from "./SparkLine";
 
 interface MyExecutionListProps {
   userId: string;
@@ -27,6 +28,11 @@ interface ExecutionRow {
 interface RecipeTitleRow {
   id: string;
   title: string;
+}
+
+interface ExecutionTrend {
+  date: string;
+  count: number;
 }
 
 const STATUS_CLASS_NAMES: Record<RecipeExecutionStatus, string> = {
@@ -77,6 +83,7 @@ function getExecutionProgress(execution: ExecutionRow): number {
 export function MyExecutionList({ userId }: MyExecutionListProps) {
   const [executions, setExecutions] = useState<ExecutionRow[]>([]);
   const [recipeTitles, setRecipeTitles] = useState<Record<string, string>>({});
+  const [executionTrends, setExecutionTrends] = useState<ExecutionTrend[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -122,12 +129,43 @@ export function MyExecutionList({ userId }: MyExecutionListProps) {
           }, {});
         }
 
+        // Load execution trends (past 7 days)
+        const sevenDaysAgo = new Date();
+        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+        const { data: trendData, error: trendError } = await supabase
+          .from("recipe_executions")
+          .select("created_at")
+          .eq("user_id", userId)
+          .gte("created_at", sevenDaysAgo.toISOString())
+          .order("created_at", { ascending: true });
+
+        let trends: ExecutionTrend[] = [];
+        if (!trendError && trendData) {
+          const countsByDate = new Map<string, number>();
+          for (let i = 6; i >= 0; i--) {
+            const d = new Date();
+            d.setDate(d.getDate() - i);
+            const dateStr = d.toISOString().split("T")[0];
+            countsByDate.set(dateStr, 0);
+          }
+
+          for (const row of trendData) {
+            const dateStr = new Date(row.created_at).toISOString().split("T")[0];
+            countsByDate.set(dateStr, (countsByDate.get(dateStr) ?? 0) + 1);
+          }
+
+          trends = Array.from(countsByDate.entries())
+            .map(([date, count]) => ({ date, count }))
+            .sort((a, b) => a.date.localeCompare(b.date));
+        }
+
         if (!active) {
           return;
         }
 
         setExecutions(nextExecutions);
         setRecipeTitles(nextTitles);
+        setExecutionTrends(trends);
       } catch (loadErr) {
         if (!active) {
           return;
@@ -172,6 +210,11 @@ export function MyExecutionList({ userId }: MyExecutionListProps) {
     return () => window.clearInterval(intervalId);
   }, [hasRunningExecution]);
 
+  const totalRecentExecutions = useMemo(
+    () => executionTrends.reduce((sum, t) => sum + t.count, 0),
+    [executionTrends],
+  );
+
   if (loading) {
     return (
       <GlassCard className="space-y-4">
@@ -213,7 +256,15 @@ export function MyExecutionList({ userId }: MyExecutionListProps) {
   return (
     <GlassCard className="space-y-5">
       <div className="space-y-1">
-        <h2 className="text-lg font-semibold text-zinc-100">我的执行记录</h2>
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-zinc-100">我的执行记录</h2>
+          {executionTrends.length > 0 && (
+            <div className="flex items-center gap-3">
+              <span className="text-xs text-zinc-500">过去7天: {totalRecentExecutions} 次</span>
+              <SparkLine data={executionTrends} />
+            </div>
+          )}
+        </div>
         <p className="text-sm text-zinc-500">最近 20 条执行。只要还有任务在跑，这里会每 3 秒自动刷新。</p>
       </div>
 

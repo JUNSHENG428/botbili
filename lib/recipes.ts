@@ -28,6 +28,13 @@ export function calculateRecipeTrendingScore(
   return baseScore * decayMultiplier + freshnessBonus;
 }
 
+// 获取所有公开 Recipe 的标签及出现次数
+export async function getPopularTags(limit = 30): Promise<{ tag: string; count: number }[]> {
+  const supabase = getSupabaseAdminClient();
+  const { data } = await supabase.rpc('get_popular_recipe_tags', { p_limit: limit });
+  return (data ?? []) as { tag: string; count: number }[];
+}
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
