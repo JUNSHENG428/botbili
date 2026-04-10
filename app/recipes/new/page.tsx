@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 
 import { AuroraButton } from "@/components/design/aurora-button";
@@ -11,10 +12,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/toast";
+import { createClient } from "@/lib/supabase/client";
 
 type CreationMode = "template" | "scratch";
 type Difficulty = "beginner" | "intermediate" | "advanced";
 type Visibility = "public" | "unlisted" | "private";
+type AuthState = "checking" | "authenticated" | "anonymous";
 
 interface RecipeFormState {
   title: string;
@@ -256,6 +259,7 @@ export default function NewRecipePage() {
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>(INITIAL_TEMPLATE.id);
   const [form, setForm] = useState<RecipeFormState>(() => createFormFromTemplate(INITIAL_TEMPLATE));
   const [submitting, setSubmitting] = useState(false);
+  const [authState, setAuthState] = useState<AuthState>("checking");
 
   const selectedTemplate = useMemo(
     () => RECIPE_TEMPLATES.find((template) => template.id === selectedTemplateId) ?? INITIAL_TEMPLATE,
@@ -275,6 +279,29 @@ export default function NewRecipePage() {
     }));
   }, [searchParams]);
 
+  useEffect(() => {
+    const supabase = createClient();
+    let active = true;
+
+    async function loadUser(): Promise<void> {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!active) {
+        return;
+      }
+
+      setAuthState(user ? "authenticated" : "anonymous");
+    }
+
+    void loadUser();
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
   function applyTemplate(template: RecipeTemplate) {
     setMode("template");
     setSelectedTemplateId(template.id);
@@ -292,6 +319,11 @@ export default function NewRecipePage() {
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+
+    if (authState !== "authenticated") {
+      toast("请先登录后再创建 Recipe", { variant: "warning" });
+      return;
+    }
 
     const title = form.title.trim();
     if (!title) {
@@ -381,6 +413,25 @@ export default function NewRecipePage() {
             </div>
           </div>
         </section>
+
+        {authState === "anonymous" ? (
+          <GlassCard className="space-y-4 border-cyan-500/20 bg-cyan-500/[0.03]">
+            <div className="space-y-2">
+              <h2 className="text-xl font-semibold text-zinc-100">请先登录</h2>
+              <p className="text-sm leading-7 text-zinc-400">
+                创建 Recipe 需要登录态。登录后你可以保存草稿、发布到广场，并在 Dashboard 里追踪执行记录。
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-3">
+              <AuroraButton href="/login" size="lg">
+                去登录
+              </AuroraButton>
+              <Link href="/recipes" className="inline-flex items-center text-sm text-cyan-300 hover:text-cyan-200">
+                先浏览热门 Recipe →
+              </Link>
+            </div>
+          </GlassCard>
+        ) : null}
 
         <GlassTabs
           tabs={[
@@ -555,8 +606,8 @@ export default function NewRecipePage() {
               </div>
 
               <div className="flex flex-wrap items-center gap-3 pt-2">
-                <AuroraButton type="submit" size="lg" disabled={submitting}>
-                  {submitting ? "创建中…" : "创建 Recipe"}
+                <AuroraButton type="submit" size="lg" disabled={submitting || authState !== "authenticated"}>
+                  {authState === "checking" ? "检查登录态…" : submitting ? "创建中…" : "创建 Recipe"}
                 </AuroraButton>
                 <Button
                   type="button"

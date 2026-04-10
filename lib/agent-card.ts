@@ -15,17 +15,14 @@ export const PUBLIC_CREATOR_FIELDS =
 const INTERNAL_CREATOR_FIELDS =
   "id, name, slug, bio, niche, avatar_url, style, followers_count, is_active, source, owner_id, guardian_id, created_at, updated_at, plan_type, upload_quota, uploads_this_month, quota_reset_at, agent_key_hash";  // agent_key_hash: INTERNAL ONLY — never expose in public responses
 
-interface CreatorVideoMetricRow {
+interface CreatorRecipeMetricRow {
   id: string;
-  language: string | null;
-  view_count: number;
+  platforms: string[] | null;
+  platform: string[] | null;
+  star_count: number | null;
+  fork_count: number | null;
+  exec_count: number | null;
   created_at: string;
-}
-
-interface EvaluationMetricRow {
-  relevance: number;
-  accuracy: number;
-  novelty: number;
 }
 
 export interface ResolvedCreator extends CreatorLookupRow {
@@ -40,24 +37,27 @@ export interface AgentCard {
     content_types: string[];
     languages: string[];
     niche: string;
-    accepts_citations: boolean;
-    accepts_evaluations: boolean;
+    supports_fork: boolean;
+    supports_execution: boolean;
     webhook_enabled: boolean;
     recipe_discovery: boolean;
     recipe_execution: boolean;
     recipe_publishing: boolean;
   };
   endpoints: {
-    feed: string;
-    videos: string;
-    evaluate: string;
+    recipe_feed: string;
+    recipes: string;
+    execute_recipe: string;
+    publish_recipe: string;
   };
   metrics: {
     influence_score: number;
-    cited_count: number;
-    feed_subscribers: number;
-    total_videos: number;
-    avg_evaluation: number;
+    followers_count: number;
+    total_recipes: number;
+    total_stars: number;
+    total_forks: number;
+    total_executions: number;
+    platforms?: string[];
   };
   protocol: "botbili/v2";
   a2a_compatible: true;
@@ -71,22 +71,6 @@ export interface AgentDiscoveryItem {
   avatar_url: string | null;
   url: string;
   agent_json_url: string;
-}
-
-function isMissingRelationError(error: unknown): boolean {
-  if (!error || typeof error !== "object") {
-    return false;
-  }
-
-  const message = "message" in error && typeof error.message === "string" ? error.message : "";
-  const code = "code" in error && typeof error.code === "string" ? error.code : "";
-
-  return (
-    code === "42P01" ||
-    code === "PGRST205" ||
-    message.includes("does not exist") ||
-    message.includes("schema cache")
-  );
 }
 
 /**
@@ -165,114 +149,35 @@ export async function resolveCreatorByIdOrSlug(identifier: string): Promise<Reso
   return slugMatch ? toResolvedCreator(slugMatch) : null;
 }
 
-async function getPublishedVideoMetrics(creatorId: string): Promise<CreatorVideoMetricRow[]> {
+async function getPublishedRecipeMetrics(authorId: string): Promise<CreatorRecipeMetricRow[]> {
   const supabase = getSupabaseAdminClient();
   const { data, error } = await supabase
-    .from("videos")
-    .select("id, language, view_count, created_at")
-    .eq("creator_id", creatorId)
+    .from("recipes")
+    .select("id, platforms, platform, star_count, fork_count, exec_count, created_at")
+    .eq("author_id", authorId)
     .eq("status", "published")
-    .returns<CreatorVideoMetricRow[]>();
+    .eq("visibility", "public")
+    .returns<CreatorRecipeMetricRow[]>();
 
   if (error) {
-    throw new Error(`getPublishedVideoMetrics failed: ${error.message}`);
+    throw new Error(`getPublishedRecipeMetrics failed: ${error.message}`);
   }
 
   return data ?? [];
 }
 
-async function getCitedCount(videoIds: string[]): Promise<number> {
-  if (videoIds.length === 0) {
-    return 0;
-  }
-
-  const supabase = getSupabaseAdminClient();
-  const { count, error } = await supabase
-    .from("citations")
-    .select("id", { count: "exact", head: true })
-    .in("cited_video_id", videoIds);
-
-  if (error) {
-    if (isMissingRelationError(error)) {
-      return 0;
+function getRecipePlatforms(recipes: CreatorRecipeMetricRow[]): string[] {
+  const platforms = recipes.flatMap((recipe) => {
+    if (Array.isArray(recipe.platforms) && recipe.platforms.length > 0) {
+      return recipe.platforms;
     }
-    throw new Error(`getCitedCount failed: ${error.message}`);
-  }
-
-  return count ?? 0;
-}
-
-function normalizeEvaluationRow(row: EvaluationMetricRow, scale: "zero_to_one" | "one_to_five"): number {
-  const average = (row.relevance + row.accuracy + row.novelty) / 3;
-  if (scale === "one_to_five") {
-    return average / 5;
-  }
-  return average;
-}
-
-async function getAverageEvaluation(videoIds: string[]): Promise<number> {
-  if (videoIds.length === 0) {
-    return 0;
-  }
-
-  const supabase = getSupabaseAdminClient();
-  const evaluationQuery = await supabase
-    .from("evaluations")
-    .select("relevance, accuracy, novelty")
-    .in("video_id", videoIds);
-
-  if (!evaluationQuery.error) {
-    const rows = (evaluationQuery.data ?? []) as EvaluationMetricRow[];
-    if (rows.length === 0) {
-      return 0;
+    if (Array.isArray(recipe.platform) && recipe.platform.length > 0) {
+      return recipe.platform;
     }
-    const total = rows.reduce((sum, row) => sum + normalizeEvaluationRow(row, "zero_to_one"), 0);
-    return total / rows.length;
-  }
-
-  if (!isMissingRelationError(evaluationQuery.error)) {
-    throw new Error(`getAverageEvaluation failed: ${evaluationQuery.error.message}`);
-  }
-
-  const ratingsQuery = await supabase
-    .from("ratings")
-    .select("relevance, accuracy, novelty")
-    .in("video_id", videoIds);
-
-  if (ratingsQuery.error) {
-    if (isMissingRelationError(ratingsQuery.error)) {
-      return 0;
-    }
-    throw new Error(`getAverageEvaluation failed: ${ratingsQuery.error.message}`);
-  }
-
-  const rows = (ratingsQuery.data ?? []) as EvaluationMetricRow[];
-  if (rows.length === 0) {
-    return 0;
-  }
-
-  const total = rows.reduce((sum, row) => sum + normalizeEvaluationRow(row, "one_to_five"), 0);
-  return total / rows.length;
-}
-
-function calculateUploadConsistency(rows: CreatorVideoMetricRow[]): number {
-  const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
-  const uploadDays = new Set<string>();
-
-  rows.forEach((row) => {
-    const createdAt = new Date(row.created_at);
-    if (Number.isNaN(createdAt.getTime()) || createdAt.getTime() < cutoff) {
-      return;
-    }
-    uploadDays.add(createdAt.toISOString().slice(0, 10));
+    return [];
   });
 
-  return Math.min(1, uploadDays.size / 30);
-}
-
-function roundTo(value: number, digits: number): number {
-  const factor = 10 ** digits;
-  return Math.round(value * factor) / factor;
+  return Array.from(new Set(platforms.filter((value) => value.trim().length > 0)));
 }
 
 function buildDescription(creator: ResolvedCreator): string {
@@ -281,7 +186,7 @@ function buildDescription(creator: ResolvedCreator): string {
   }
 
   const nicheText = creator.niche?.trim() ? `${creator.niche}领域` : "垂直内容";
-  return `每日 ${nicheText}资讯速递，由 Agent 全自动运营`;
+  return `分享 ${nicheText} 的 AI 视频 Recipe，支持 Fork、执行和持续改进。`;
 }
 
 /**
@@ -293,22 +198,18 @@ export async function generateAgentCard(identifier: string, baseUrl: string): Pr
     return null;
   }
 
-  const videoMetrics = await getPublishedVideoMetrics(creator.id);
-  const videoIds = videoMetrics.map((video) => video.id);
-  const languages = Array.from(
-    new Set(videoMetrics.map((video) => video.language).filter((value): value is string => Boolean(value))),
-  );
-  const totalViews = videoMetrics.reduce((sum, video) => sum + (video.view_count ?? 0), 0);
-  const citedCount = await getCitedCount(videoIds);
-  const avgEvaluation = await getAverageEvaluation(videoIds);
-  const uploadConsistency = calculateUploadConsistency(videoMetrics);
+  const recipeMetrics = await getPublishedRecipeMetrics(creator.owner_id);
+  const platforms = getRecipePlatforms(recipeMetrics);
+  const totalStars = recipeMetrics.reduce((sum, recipe) => sum + (recipe.star_count ?? 0), 0);
+  const totalForks = recipeMetrics.reduce((sum, recipe) => sum + (recipe.fork_count ?? 0), 0);
+  const totalExecutions = recipeMetrics.reduce((sum, recipe) => sum + (recipe.exec_count ?? 0), 0);
 
   const influenceScore = Math.round(
-    citedCount * 30 +
-      creator.followers_count * 20 +
-      avgEvaluation * 1500 +
-      uploadConsistency * 1000 +
-      totalViews * 0.01,
+    creator.followers_count * 10 +
+      recipeMetrics.length * 5 +
+      totalStars * 20 +
+      totalForks * 25 +
+      totalExecutions * 10,
   );
 
   return {
@@ -316,27 +217,30 @@ export async function generateAgentCard(identifier: string, baseUrl: string): Pr
     description: buildDescription(creator),
     url: `${baseUrl}/c/${creator.slug}`,
     capabilities: {
-      content_types: ["video"],
-      languages: languages.length > 0 ? languages : ["zh-CN"],
+      content_types: ["ai_video_recipe"],
+      languages: ["zh-CN"],
       niche: creator.niche || "未分类",
-      accepts_citations: true,
-      accepts_evaluations: true,
+      supports_fork: true,
+      supports_execution: true,
       webhook_enabled: true,
       recipe_discovery: true,
       recipe_execution: true,
       recipe_publishing: true,
     },
     endpoints: {
-      feed: `${baseUrl}/feed/${creator.slug}.json`,
-      videos: `${baseUrl}/api/creators/${creator.slug}/videos`,
-      evaluate: `${baseUrl}/api/videos/{video_id}/evaluate`,
+      recipe_feed: `${baseUrl}/feed/${creator.slug}.json`,
+      recipes: `${baseUrl}/api/recipes?author=${creator.owner_id}`,
+      execute_recipe: `${baseUrl}/api/recipes/{recipe_id}/execute`,
+      publish_recipe: `${baseUrl}/api/recipes`,
     },
     metrics: {
       influence_score: influenceScore,
-      cited_count: citedCount,
-      feed_subscribers: creator.followers_count,
-      total_videos: videoMetrics.length,
-      avg_evaluation: roundTo(avgEvaluation, 2),
+      followers_count: creator.followers_count,
+      total_recipes: recipeMetrics.length,
+      total_stars: totalStars,
+      total_forks: totalForks,
+      total_executions: totalExecutions,
+      ...(platforms.length > 0 ? { platforms } : {}),
     },
     protocol: "botbili/v2",
     a2a_compatible: true,

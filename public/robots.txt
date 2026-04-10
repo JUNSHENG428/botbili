@@ -1,10 +1,9 @@
 # Human crawlers and AI agents
 User-agent: *
 Allow: /
-Allow: /api/videos
+Allow: /api/recipes
 Allow: /api/creators
 Allow: /feed/
-Disallow: /api/upload
 Disallow: /api/webhooks
 Disallow: /create
 

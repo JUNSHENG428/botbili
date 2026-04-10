@@ -16,7 +16,6 @@ interface ExecutionRow {
   recipe_id: string;
   status: RecipeExecutionStatus;
   progress_pct: number | null;
-  progress: number | null;
   output_external_url: string | null;
   output_thumbnail_url: string | null;
   output_platform: string | null;
@@ -71,7 +70,7 @@ function getExecutionProgress(execution: ExecutionRow): number {
     case "failed":
       return 100;
     default:
-      return execution.progress ?? 0;
+      return 0;
   }
 }
 
@@ -94,7 +93,7 @@ export function MyExecutionList({ userId }: MyExecutionListProps) {
 
         const { data, error: executionsError } = await supabase
           .from("recipe_executions")
-          .select("id, recipe_id, status, progress_pct, progress, output_external_url, output_thumbnail_url, output_platform, error_message, created_at, updated_at")
+          .select("id, recipe_id, status, progress_pct, output_external_url, output_thumbnail_url, output_platform, error_message, created_at, updated_at")
           .eq("user_id", userId)
           .order("created_at", { ascending: false })
           .limit(20);

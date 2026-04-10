@@ -46,14 +46,14 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
   }
 
   if (user && pathname === "/login") {
-    // Smart redirect: if user has a creator, go to dashboard; otherwise go to feed
+    // Smart redirect: if user has a creator, go to dashboard; otherwise go to Recipe discovery.
     const { data: existingCreator } = await supabase
       .from("creators")
       .select("id")
       .eq("owner_id", user.id)
       .limit(1)
       .maybeSingle();
-    const redirectPath = existingCreator ? "/dashboard" : "/feed";
+    const redirectPath = existingCreator ? "/dashboard" : "/recipes";
     return NextResponse.redirect(new URL(redirectPath, request.url));
   }
 
@@ -66,7 +66,7 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
   }
 
   if (user && ADMIN_ROUTES.some((r) => pathname.startsWith(r)) && user.email !== ADMIN_EMAIL) {
-    return NextResponse.redirect(new URL("/feed", request.url));
+    return NextResponse.redirect(new URL("/recipes", request.url));
   }
 
   if (user && pathname !== "/invite" && INVITE_ROUTES.some((r) => pathname.startsWith(r))) {

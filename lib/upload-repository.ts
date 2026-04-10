@@ -1,3 +1,7 @@
+// BotBili does not host videos.
+// Videos are published to third-party platforms by Agents.
+// This repository stores execution output metadata (url, thumbnail, gif).
+
 import { randomUUID } from "node:crypto";
 
 import { getSupabaseAdminClient } from "@/lib/supabase/server";

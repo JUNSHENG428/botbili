@@ -1,5 +1,6 @@
 import { getSupabaseAdminClient } from "@/lib/supabase/server";
 import type { VideoRecord, Creator } from "@/types";
+import type { RecipeExecutionOutput } from "@/types/recipe";
 
 export interface WebhookRecord {
   id: string;
@@ -32,8 +33,126 @@ export interface WebhookEventPayload {
   };
 }
 
+export interface ExecutionCompletedWebhookPayload {
+  event: "execution.completed";
+  timestamp: string;
+  data: {
+    execution_id: string;
+    recipe: {
+      id: string;
+      title: string;
+      slug: string;
+    };
+    output: RecipeExecutionOutput;
+  };
+}
+
+export interface DispatchExecutionCompletedInput {
+  creatorId: string;
+  executionId: string;
+  recipe: {
+    id: string;
+    title: string;
+    slug: string;
+  };
+  output: RecipeExecutionOutput;
+}
+
 function getBaseUrl(): string {
   return process.env.NEXT_PUBLIC_APP_URL ?? "https://www.botbili.com";
+}
+
+async function signWebhookPayload(secret: string, payload: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const keyData = encoder.encode(secret);
+  const payloadData = encoder.encode(payload);
+
+  const cryptoKey = await crypto.subtle.importKey(
+    "raw",
+    keyData,
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const signatureBuffer = await crypto.subtle.sign("HMAC", cryptoKey, payloadData);
+  const signatureHex = Array.from(new Uint8Array(signatureBuffer))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+
+  return `sha256=${signatureHex}`;
+}
+
+export async function dispatchExecutionCompletedWebhooks(
+  input: DispatchExecutionCompletedInput,
+): Promise<void> {
+  const supabase = getSupabaseAdminClient();
+
+  const { data: webhooks } = await supabase
+    .from("webhooks")
+    .select("*")
+    .eq("creator_id", input.creatorId)
+    .eq("is_active", true)
+    .contains("events", ["execution.completed"])
+    .returns<WebhookRecord[]>();
+
+  if (!webhooks?.length) {
+    return;
+  }
+
+  const payload = JSON.stringify({
+    event: "execution.completed",
+    timestamp: new Date().toISOString(),
+    data: {
+      execution_id: input.executionId,
+      recipe: input.recipe,
+      output: input.output,
+    },
+  } satisfies ExecutionCompletedWebhookPayload);
+
+  const deliveryPromises = webhooks.map(async (wh) => {
+    try {
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+        "X-BotBili-Event": "execution.completed",
+        "X-BotBili-Delivery": crypto.randomUUID(),
+      };
+
+      if (wh.secret) {
+        headers["X-BotBili-Signature"] = await signWebhookPayload(wh.secret, payload);
+      }
+
+      const res = await fetch(wh.target_url, {
+        method: "POST",
+        headers,
+        body: payload,
+        signal: AbortSignal.timeout(10000),
+      });
+
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}`);
+      }
+
+      await supabase
+        .from("webhooks")
+        .update({
+          last_triggered_at: new Date().toISOString(),
+          failure_count: 0,
+        })
+        .eq("id", wh.id);
+    } catch (err) {
+      console.error(`Execution webhook delivery failed for ${wh.id}:`, err);
+      const newCount = (wh.failure_count ?? 0) + 1;
+      await supabase
+        .from("webhooks")
+        .update({
+          failure_count: newCount,
+          is_active: newCount < 5,
+        })
+        .eq("id", wh.id);
+    }
+  });
+
+  await Promise.all(deliveryPromises);
 }
 
 export async function dispatchWebhooks(videoId: string, creatorId: string): Promise<void> {
@@ -104,22 +223,7 @@ export async function dispatchWebhooks(videoId: string, creatorId: string): Prom
       };
 
       if (wh.secret) {
-        const encoder = new TextEncoder();
-        const keyData = encoder.encode(wh.secret);
-        const payloadData = encoder.encode(payload);
-
-        const cryptoKey = await crypto.subtle.importKey(
-          "raw",
-          keyData,
-          { name: "HMAC", hash: "SHA-256" },
-          false,
-          ["sign"]
-        );
-        const signatureBuffer = await crypto.subtle.sign("HMAC", cryptoKey, payloadData);
-        const signatureHex = Array.from(new Uint8Array(signatureBuffer))
-          .map((b) => b.toString(16).padStart(2, "0"))
-          .join("");
-        headers["X-BotBili-Signature"] = `sha256=${signatureHex}`;
+        headers["X-BotBili-Signature"] = await signWebhookPayload(wh.secret, payload);
       }
 
       const res = await fetch(wh.target_url, {

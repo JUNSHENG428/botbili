@@ -2,7 +2,11 @@ import { NextResponse } from "next/server";
 
 import { verifyCsrfOrigin } from "@/lib/csrf";
 import { createClientForServer, getSupabaseAdminClient } from "@/lib/supabase/server";
-import type { Recipe } from "@/types/recipe";
+import type {
+  Recipe,
+  RecipeExecutionOutput as RecipeExecutionOutputData,
+  RecipeExecutionStatus,
+} from "@/types/recipe";
 
 type RecipeVisibility = "public" | "unlisted" | "private";
 type RecipeDifficulty = "beginner" | "intermediate" | "advanced";
@@ -19,12 +23,17 @@ interface RecipeAuthorSummary {
   author_type: Recipe["author_type"];
 }
 
-interface RecipeExecutionOutput {
+interface RecipeExecutionHistoryItem {
   id: string;
+  status: RecipeExecutionStatus;
+  command_text: string | null;
+  command_preview: string | null;
   output_external_url: string | null;
   output_thumbnail_url: string | null;
   output_platform: string | null;
+  output: RecipeExecutionOutputData | null;
   created_at: string;
+  updated_at: string;
 }
 
 interface ProfileRow {
@@ -173,21 +182,20 @@ async function getViewerState(recipeId: string, userId?: string): Promise<{ star
   };
 }
 
-async function getRecentExecutions(recipeId: string): Promise<RecipeExecutionOutput[]> {
+async function getRecentExecutions(recipeId: string): Promise<RecipeExecutionHistoryItem[]> {
   const admin = getSupabaseAdminClient();
   const { data, error } = await admin
     .from("recipe_executions")
-    .select("id, output_external_url, output_thumbnail_url, output_platform, created_at")
+    .select("id, status, command_text, command_preview, output_external_url, output_thumbnail_url, output_platform, output, created_at, updated_at")
     .eq("recipe_id", recipeId)
-    .eq("status", "success")
     .order("created_at", { ascending: false })
-    .limit(5);
+    .limit(8);
 
   if (error) {
     throw new Error(`读取执行记录失败: ${error.message}`);
   }
 
-  return (data ?? []) as RecipeExecutionOutput[];
+  return (data ?? []) as RecipeExecutionHistoryItem[];
 }
 
 function canViewRecipe(recipe: Recipe, viewerUserId?: string): boolean {

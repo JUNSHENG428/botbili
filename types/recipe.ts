@@ -7,6 +7,25 @@ export type RecipeExecutionStatus =
   | 'success'
   | 'failed';
 
+export type VideoPlatform =
+  | 'bilibili'
+  | 'youtube'
+  | 'douyin'
+  | 'kuaishou'
+  | 'xiaohongshu'
+  | 'other';
+
+export interface RecipeExecutionOutput {
+  platform: VideoPlatform;
+  video_url: string;
+  title: string;
+  thumbnail_url?: string;
+  gif_url?: string;
+  published_at?: string;
+  view_count?: number;
+  platform_video_id?: string;
+}
+
 export interface Recipe {
   id: string;
   author_id: string;
@@ -76,7 +95,6 @@ export interface RecipeExecution {
   recipe_id: string;
   user_id: string;
   status: RecipeExecutionStatus;
-  progress: number;
   progress_pct: number;
   error_message: string | null;
   input_overrides: Record<string, unknown> | null;
@@ -85,6 +103,7 @@ export interface RecipeExecution {
   output_external_url: string | null;
   output_thumbnail_url: string | null;
   output_platform: string | null;
+  output?: RecipeExecutionOutput | null;
   started_at: string | null;
   completed_at: string | null;
   created_at: string;

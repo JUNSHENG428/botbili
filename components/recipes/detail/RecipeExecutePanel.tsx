@@ -7,12 +7,18 @@ import type { ReactNode } from "react";
 import { AuroraButton } from "@/components/design/aurora-button";
 import { GlassCard } from "@/components/design/glass-card";
 import { RecipeExecuteGate } from "@/components/recipes/RecipeExecuteGate";
+import { RecipeExecutionOutput } from "@/components/recipes/detail/RecipeExecutionOutput";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
 import { formatRelativeTime } from "@/lib/format";
 import { getRecipePlatforms } from "@/lib/recipe-utils";
-import type { Recipe, RecipeExecutionStatus } from "@/types/recipe";
+import type {
+  Recipe,
+  RecipeExecutionOutput as RecipeExecutionOutputData,
+  RecipeExecutionStatus,
+  VideoPlatform,
+} from "@/types/recipe";
 
 interface PendingExecutionState {
   executionId: string;
@@ -22,6 +28,10 @@ interface PendingExecutionState {
 interface ExecutionStatusPayload {
   status: RecipeExecutionStatus;
   progress_pct: number;
+  output: RecipeExecutionOutputData | null;
+  output_external_url: string | null;
+  output_thumbnail_url: string | null;
+  output_platform: string | null;
   error_message: string | null;
 }
 
@@ -69,6 +79,36 @@ function getExecutionStatusClassName(status: RecipeExecutionStatus): string {
   return "border-cyan-500/30 bg-cyan-500/10 text-cyan-300";
 }
 
+function getOutputStatus(status: RecipeExecutionStatus): "pending" | "running" | "completed" | "failed" {
+  if (status === "success") {
+    return "completed";
+  }
+  if (status === "failed") {
+    return "failed";
+  }
+  if (status === "pending") {
+    return "pending";
+  }
+  return "running";
+}
+
+function normalizeExecutionOutput(payload: ExecutionStatusPayload): RecipeExecutionOutputData | null {
+  if (payload.output) {
+    return payload.output;
+  }
+
+  if (!payload.output_external_url || !payload.output_platform) {
+    return null;
+  }
+
+  return {
+    platform: payload.output_platform as VideoPlatform,
+    video_url: payload.output_external_url,
+    title: "执行产出",
+    thumbnail_url: payload.output_thumbnail_url ?? undefined,
+  };
+}
+
 function ExecutionStatusBadge({ executionId }: { executionId: string }) {
   const [statusState, setStatusState] = useState<ExecutionStatusPayload | null>(null);
 
@@ -90,7 +130,7 @@ function ExecutionStatusBadge({ executionId }: { executionId: string }) {
 
         setStatusState(payload.data);
 
-        if ((payload.data.status === "success" || payload.data.status === "failed") && intervalId) {
+        if ((normalizeExecutionOutput(payload.data) || payload.data.status === "failed") && intervalId) {
           window.clearInterval(intervalId);
           intervalId = null;
         }
@@ -102,7 +142,7 @@ function ExecutionStatusBadge({ executionId }: { executionId: string }) {
     void loadExecutionStatus();
     intervalId = window.setInterval(() => {
       void loadExecutionStatus();
-    }, 2000);
+    }, 3000);
 
     return () => {
       active = false;
@@ -126,20 +166,29 @@ function ExecutionStatusBadge({ executionId }: { executionId: string }) {
   }
 
   const isRunning = statusState.status !== "pending" && statusState.status !== "success" && statusState.status !== "failed";
+  const output = normalizeExecutionOutput(statusState);
 
   return (
-    <div className="flex flex-wrap items-center gap-2 text-xs">
-      <span className={`inline-flex items-center gap-2 rounded-full border px-2.5 py-1 ${getExecutionStatusClassName(statusState.status)}`}>
-        {isRunning ? (
-          <span className="h-3 w-3 animate-spin rounded-full border border-current border-t-transparent" />
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center gap-2 text-xs">
+        <span className={`inline-flex items-center gap-2 rounded-full border px-2.5 py-1 ${getExecutionStatusClassName(statusState.status)}`}>
+          {isRunning ? (
+            <span className="h-3 w-3 animate-spin rounded-full border border-current border-t-transparent" />
+          ) : null}
+          {getExecutionStatusLabel(statusState.status)}
+          <span className="tabular-nums opacity-80">{statusState.progress_pct}%</span>
+        </span>
+        {statusState.status === "success" && !output ? (
+          <span className="text-zinc-400">执行完成，等待 Agent 回填视频链接</span>
         ) : null}
-        {getExecutionStatusLabel(statusState.status)}
-        <span className="tabular-nums opacity-80">{statusState.progress_pct}%</span>
-      </span>
-      <Link href="/dashboard" className="text-cyan-300 transition hover:text-cyan-200">
-        查看执行详情
-      </Link>
-      {statusState.error_message ? <span className="text-red-300">{statusState.error_message}</span> : null}
+        <Link href="/dashboard" className="text-cyan-300 transition hover:text-cyan-200">
+          查看执行详情
+        </Link>
+        {statusState.error_message ? <span className="text-red-300">{statusState.error_message}</span> : null}
+      </div>
+      {output ? (
+        <RecipeExecutionOutput output={output} status={getOutputStatus(statusState.status)} />
+      ) : null}
     </div>
   );
 }

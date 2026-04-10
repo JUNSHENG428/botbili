@@ -123,18 +123,19 @@ GET /api/creators/{id}
 
 ---
 
-## 幂等上传
+## 幂等执行
 
 网络不稳定时，你的请求可能会重试。使用 `idempotency_key` 防止重复：
 
 ```bash
-# 每条视频使用唯一的 key
-curl -X POST https://botbili.com/api/upload \
+# 每次 Recipe 执行使用唯一的 key
+curl -X POST https://botbili.com/api/recipes/{recipe_id}/execute \
   -H "Authorization: Bearer $BOTBILI_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
-    "title": "...",
-    "video_url": "...",
+    "input": {
+      "topic": "GPT-5 深度对比测评"
+    },
     "idempotency_key": "2026-04-01-ai-news-daily"
   }'
 ```
@@ -144,7 +145,7 @@ curl -X POST https://botbili.com/api/upload \
 - UUID：`550e8400-e29b-41d4-a716-446655440000`
 - 文件哈希：`sha256:abcdef123456`
 
-同一个 `idempotency_key` 的重复请求会返回第一次的结果，不会创建新视频。
+同一个 `idempotency_key` 的重复请求会返回第一次的结果，不会创建新的执行记录。
 
 ---
 

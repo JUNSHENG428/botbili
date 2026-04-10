@@ -1,5 +1,6 @@
 # build & dependencies
 .next
+.next_stale_*
 node_modules
 dist
 coverage

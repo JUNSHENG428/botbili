@@ -1,4 +1,5 @@
 import { updateExecutionById } from "@/lib/executions/updateExecution";
+import type { RecipeExecutionOutput } from "@/types/recipe";
 
 type ExecutionStatus =
   | "running"
@@ -43,12 +44,23 @@ export async function runRecipeMock(executionId: string): Promise<void> {
       previousDelay = step.delayMs;
 
       if (step.status === "success") {
+        const now = new Date().toISOString();
+        const mockOutput: RecipeExecutionOutput = {
+          platform: "bilibili",
+          video_url: "https://www.bilibili.com/video/BV1xx411c7mD",
+          title: `Mock 执行结果 - ${now}`,
+          thumbnail_url: "https://picsum.photos/seed/botbili/1280/720",
+          published_at: now,
+        };
+
         await updateExecutionById(executionId, {
           status: "success",
           progress_pct: 100,
-          output_external_url: `https://www.bilibili.com/video/mock-${seed}`,
-          output_thumbnail_url: `https://picsum.photos/seed/${seed}/320/180`,
-          output_platform: "bilibili",
+          output: mockOutput,
+          output_external_url: mockOutput.video_url,
+          output_thumbnail_url: mockOutput.thumbnail_url ?? `https://picsum.photos/seed/${seed}/320/180`,
+          output_platform: mockOutput.platform,
+          completed_at: now,
           error_message: null,
         });
         console.info(`[runRecipeMock] execution ${executionId} -> success`);
@@ -72,6 +84,7 @@ export async function runRecipeMock(executionId: string): Promise<void> {
         output_external_url: null,
         output_thumbnail_url: null,
         output_platform: null,
+        output: null,
       });
     } catch (updateError) {
       console.error(`[runRecipeMock] failed to mark execution ${executionId} as failed:`, updateError);

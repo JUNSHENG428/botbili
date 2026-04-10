@@ -228,61 +228,92 @@ export async function GET(request: Request): Promise<NextResponse> {
     }
 
     const admin = getSupabaseAdminClient();
-    let query = admin
-      .from("recipes")
-      .select("*")
-      .eq("status", "published")
-      .eq("visibility", "public");
-
-    if (category) {
-      query = query.eq("category", category);
-    }
-
-    if (difficulty) {
-      query = query.eq("difficulty", difficulty);
-    }
-
-    const { data, error } = await query.limit(500);
-
-    if (error) {
-      throw new Error(`加载 Recipe 列表失败: ${error.message}`);
-    }
-
-    let recipes = (data ?? []) as Recipe[];
-
-    if (q) {
-      recipes = recipes.filter((recipe) => {
-        const haystacks = [recipe.title, recipe.description ?? "", recipe.readme_md ?? ""];
-        return haystacks.some((value) => value.toLowerCase().includes(q));
-      });
-    }
-
-    if (platforms.length > 0) {
-      recipes = recipes.filter((recipe) => {
-        const recipePlatforms = getRecipePlatforms(recipe);
-        return platforms.some((platform) => recipePlatforms.includes(platform));
-      });
-    }
-
-    recipes = recipes.sort((left, right) => {
-      switch (sort) {
-        case "newest":
-          return new Date(right.created_at).getTime() - new Date(left.created_at).getTime();
-        case "most_starred":
-          return right.star_count - left.star_count;
-        case "most_forked":
-          return right.fork_count - left.fork_count;
-        case "most_executed":
-          return right.exec_count - left.exec_count;
-        case "trending":
-        default:
-          return calculateRecipeTrendingScore(right) - calculateRecipeTrendingScore(left);
-      }
-    });
-
-    const total = recipes.length;
     const start = (page - 1) * limit;
-    const pagedRecipes = recipes.slice(start, start + limit);
+    const end = start + limit - 1;
+    let pagedRecipes: Recipe[];
+    let total: number;
+
+    if (sort === "trending") {
+      // 后续可改为预计算 trending_score 列；当前先限制候选集，避免无上限内存排序。
+      let trendingQuery = admin
+        .from("recipes")
+        .select("*")
+        .eq("status", "published")
+        .eq("visibility", "public")
+        .order("created_at", { ascending: false })
+        .limit(200);
+
+      if (category) {
+        trendingQuery = trendingQuery.eq("category", category);
+      }
+
+      if (difficulty) {
+        trendingQuery = trendingQuery.eq("difficulty", difficulty);
+      }
+
+      if (q) {
+        trendingQuery = trendingQuery.ilike("title", `%${q}%`);
+      }
+
+      if (platforms.length > 0) {
+        trendingQuery = trendingQuery.contains("platforms", platforms);
+      }
+
+      const { data, error } = await trendingQuery;
+
+      if (error) {
+        throw new Error(`加载 Recipe 列表失败: ${error.message}`);
+      }
+
+      const sortedRecipes = ((data ?? []) as Recipe[]).sort(
+        (left, right) => calculateRecipeTrendingScore(right) - calculateRecipeTrendingScore(left),
+      );
+
+      total = sortedRecipes.length;
+      pagedRecipes = sortedRecipes.slice(start, start + limit);
+    } else {
+      const sortColumns: Record<Exclude<RecipeSort, "trending">, { column: keyof Recipe; ascending: boolean }> = {
+        newest: { column: "created_at", ascending: false },
+        most_starred: { column: "star_count", ascending: false },
+        most_forked: { column: "fork_count", ascending: false },
+        most_executed: { column: "exec_count", ascending: false },
+      };
+      const sortColumn = sortColumns[sort];
+
+      let query = admin
+        .from("recipes")
+        .select("*", { count: "exact" })
+        .eq("status", "published")
+        .eq("visibility", "public");
+
+      if (category) {
+        query = query.eq("category", category);
+      }
+
+      if (difficulty) {
+        query = query.eq("difficulty", difficulty);
+      }
+
+      if (q) {
+        query = query.ilike("title", `%${q}%`);
+      }
+
+      if (platforms.length > 0) {
+        query = query.contains("platforms", platforms);
+      }
+
+      const { data, error, count } = await query
+        .order(sortColumn.column, { ascending: sortColumn.ascending })
+        .range(start, end);
+
+      if (error) {
+        throw new Error(`加载 Recipe 列表失败: ${error.message}`);
+      }
+
+      pagedRecipes = (data ?? []) as Recipe[];
+      total = count ?? pagedRecipes.length;
+    }
+
     const authorMap = await buildAuthorMap(pagedRecipes);
 
     const recipeItems: RecipeListItem[] = pagedRecipes.map((recipe) => ({

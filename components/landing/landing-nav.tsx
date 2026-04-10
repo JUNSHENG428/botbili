@@ -1,76 +1,50 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 
 interface NavItem {
   label: string;
   href: string;
 }
 
-interface LandingNavProps {
-  role: "undecided" | "human" | "agent";
-}
-
-const BASE_NAV_ITEMS: NavItem[] = [{ label: "首页", href: "#hero" }];
-
-const HUMAN_NAV_ITEMS: NavItem[] = [
-  { label: "对比", href: "#comparison" },
-  { label: "样板", href: "#showcase" },
+const NAV_ITEMS: NavItem[] = [
   { label: "流程", href: "#workflow" },
+  { label: "热门", href: "#trending" },
+  { label: "对比", href: "#comparison" },
+  { label: "Agent API", href: "#agent-api" },
   { label: "FAQ", href: "#faq" },
 ];
 
-const AGENT_NAV_ITEMS: NavItem[] = [
-  { label: "开发者", href: "#developer" },
-  { label: "FAQ", href: "#faq" },
-];
-
-export function LandingNav({ role }: LandingNavProps) {
+export function LandingNav() {
   const [scrolled, setScrolled] = useState(false);
   const [activeSection, setActiveSection] = useState("hero");
   const [mobileOpen, setMobileOpen] = useState(false);
-  const navItems = useMemo(() => {
-    if (role === "human") {
-      return [...BASE_NAV_ITEMS, ...HUMAN_NAV_ITEMS];
-    }
-
-    if (role === "agent") {
-      return [...BASE_NAV_ITEMS, ...AGENT_NAV_ITEMS];
-    }
-
-    return BASE_NAV_ITEMS;
-  }, [role]);
 
   useEffect(() => {
     function onScroll(): void {
       setScrolled(window.scrollY > 20);
     }
+
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
-  // 移动菜单展开时锁定 body 滚动，防止内容区域文字与导航重叠
   useEffect(() => {
-    if (mobileOpen) {
-      document.body.style.overflow = "hidden";
-    } else {
-      document.body.style.overflow = "";
-    }
+    document.body.style.overflow = mobileOpen ? "hidden" : "";
     return () => {
       document.body.style.overflow = "";
     };
   }, [mobileOpen]);
 
   useEffect(() => {
-    const ids = navItems.map((item) => item.href.slice(1));
-    const sections = ids
+    const sections = ["hero", ...NAV_ITEMS.map((item) => item.href.slice(1))]
       .map((id) => document.getElementById(id))
       .filter(Boolean) as HTMLElement[];
 
     const observer = new IntersectionObserver(
       (entries) => {
-        const visible = entries.find((e) => e.isIntersecting);
+        const visible = entries.find((entry) => entry.isIntersecting);
         if (visible?.target.id) {
           setActiveSection(visible.target.id);
         }
@@ -78,18 +52,14 @@ export function LandingNav({ role }: LandingNavProps) {
       { rootMargin: "-40% 0px -55% 0px" },
     );
 
-    sections.forEach((s) => observer.observe(s));
+    sections.forEach((section) => observer.observe(section));
     return () => observer.disconnect();
-  }, [navItems]);
-
-  useEffect(() => {
-    setActiveSection("hero");
-  }, [role]);
+  }, []);
 
   function scrollTo(href: string): void {
-    const el = document.querySelector(href);
-    if (el) {
-      el.scrollIntoView({ behavior: "smooth" });
+    const element = document.querySelector(href);
+    if (element) {
+      element.scrollIntoView({ behavior: "smooth" });
       setMobileOpen(false);
     }
   }
@@ -103,7 +73,6 @@ export function LandingNav({ role }: LandingNavProps) {
       }`}
     >
       <div className="mx-auto flex h-14 max-w-7xl items-center justify-between px-6">
-        {/* Logo */}
         <button
           type="button"
           onClick={() => scrollTo("#hero")}
@@ -113,9 +82,8 @@ export function LandingNav({ role }: LandingNavProps) {
           <span className="text-lg font-bold text-cyan-400">Bili</span>
         </button>
 
-        {/* 桌面端锚点链接 */}
         <div className="hidden items-center gap-1 md:flex">
-          {navItems.map((item) => (
+          {NAV_ITEMS.map((item) => (
             <button
               key={item.href}
               type="button"
@@ -131,18 +99,17 @@ export function LandingNav({ role }: LandingNavProps) {
           ))}
         </div>
 
-        {/* 右侧 CTA + 汉堡 */}
         <div className="flex items-center gap-3">
           <Link
-            href="/onboarding"
+            href="/recipes"
             className="hidden rounded-lg border border-cyan-500/30 bg-cyan-500/10 px-4 py-1.5 text-sm font-medium text-cyan-400 transition-all hover:bg-cyan-500/20 sm:block"
           >
-            创建频道
+            发现 Recipe
           </Link>
 
           <button
             type="button"
-            onClick={() => setMobileOpen((v) => !v)}
+            onClick={() => setMobileOpen((value) => !value)}
             className="flex flex-col gap-1 p-2 md:hidden"
             aria-label="菜单"
           >
@@ -159,14 +126,13 @@ export function LandingNav({ role }: LandingNavProps) {
         </div>
       </div>
 
-      {/* 移动端下拉菜单 */}
       <div
         className={`overflow-hidden bg-zinc-950/95 backdrop-blur-xl transition-all duration-300 md:hidden ${
           mobileOpen ? "max-h-96 border-b border-zinc-800/50" : "max-h-0"
         }`}
       >
         <div className="space-y-1 px-6 py-3">
-          {navItems.map((item) => (
+          {NAV_ITEMS.map((item) => (
             <button
               key={item.href}
               type="button"
@@ -181,11 +147,11 @@ export function LandingNav({ role }: LandingNavProps) {
             </button>
           ))}
           <Link
-            href="/onboarding"
+            href="/recipes"
             onClick={() => setMobileOpen(false)}
             className="mt-2 block w-full rounded-lg border border-cyan-500/30 bg-cyan-500/10 px-4 py-2.5 text-center text-sm font-medium text-cyan-400"
           >
-            创建频道
+            发现热门 Recipe
           </Link>
         </div>
       </div>

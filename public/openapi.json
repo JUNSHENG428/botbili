@@ -461,7 +461,7 @@
         "summary": "Create a new recipe draft",
         "security": [
           {
-            "BearerAuth": []
+            "CookieAuth": []
           }
         ],
         "requestBody": {
@@ -560,7 +560,7 @@
         "summary": "Update recipe draft or published content",
         "security": [
           {
-            "BearerAuth": []
+            "CookieAuth": []
           }
         ],
         "parameters": [
@@ -623,7 +623,7 @@
         "summary": "Toggle public star on a recipe",
         "security": [
           {
-            "BearerAuth": []
+            "CookieAuth": []
           }
         ],
         "parameters": [
@@ -676,7 +676,7 @@
         "summary": "Toggle private save on a recipe",
         "security": [
           {
-            "BearerAuth": []
+            "CookieAuth": []
           }
         ],
         "parameters": [
@@ -729,7 +729,7 @@
         "summary": "Fork a recipe into a new draft",
         "security": [
           {
-            "BearerAuth": []
+            "CookieAuth": []
           }
         ],
         "parameters": [
@@ -782,7 +782,7 @@
         "summary": "Execute a published recipe",
         "security": [
           {
-            "BearerAuth": []
+            "CookieAuth": []
           }
         ],
         "parameters": [
@@ -835,7 +835,7 @@
         "summary": "Get execution status",
         "security": [
           {
-            "BearerAuth": []
+            "CookieAuth": []
           }
         ],
         "parameters": [
@@ -851,6 +851,67 @@
         "responses": {
           "200": {
             "description": "Execution status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExecutionStatusResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "operationId": "patchExecutionOutput",
+        "summary": "Backfill execution output from an Agent",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecipeExecutionOutput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Execution output saved",
             "content": {
               "application/json": {
                 "schema": {
@@ -953,6 +1014,12 @@
         "type": "http",
         "scheme": "bearer",
         "description": "API Key from POST /api/creators"
+      },
+      "CookieAuth": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "sb-auth-token",
+        "description": "Supabase browser session cookie. Current Recipe write, execute, and execution status routes require a logged-in browser session; Bearer API Key support is not enabled for these routes yet."
       }
     },
     "schemas": {
@@ -1708,9 +1775,64 @@
             "type": "string",
             "nullable": true
           },
+          "output": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/RecipeExecutionOutput"
+              }
+            ]
+          },
           "created_at": {
             "type": "string",
             "format": "date-time"
+          }
+        }
+      },
+      "RecipeExecutionOutput": {
+        "type": "object",
+        "required": [
+          "platform",
+          "video_url",
+          "title"
+        ],
+        "properties": {
+          "platform": {
+            "type": "string",
+            "enum": [
+              "bilibili",
+              "youtube",
+              "douyin",
+              "kuaishou",
+              "xiaohongshu",
+              "other"
+            ]
+          },
+          "video_url": {
+            "type": "string",
+            "format": "uri"
+          },
+          "title": {
+            "type": "string"
+          },
+          "thumbnail_url": {
+            "type": "string",
+            "format": "uri"
+          },
+          "gif_url": {
+            "type": "string",
+            "format": "uri"
+          },
+          "published_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "view_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "platform_video_id": {
+            "type": "string"
           }
         }
       },
@@ -1947,6 +2069,14 @@
               "output_platform": {
                 "type": "string",
                 "nullable": true
+              },
+              "output": {
+                "nullable": true,
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/RecipeExecutionOutput"
+                  }
+                ]
               },
               "error_message": {
                 "type": "string",

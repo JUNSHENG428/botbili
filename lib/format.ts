@@ -1,3 +1,5 @@
+import type { VideoPlatform } from "@/types/recipe";
+
 /**
  * 数字转人类展示播放量。
  */
@@ -92,4 +94,28 @@ export function formatDelta(value: number): { text: string; color: "green" | "re
     return { text: `${value.toFixed(1)}%`, color: "red" };
   }
   return { text: "0.0%", color: "gray" };
+}
+
+export function getPlatformLabel(platform: VideoPlatform): string {
+  const map: Record<VideoPlatform, string> = {
+    bilibili: "B站",
+    youtube: "YouTube",
+    douyin: "抖音",
+    kuaishou: "快手",
+    xiaohongshu: "小红书",
+    other: "外链",
+  };
+  return map[platform] ?? "外链";
+}
+
+export function getPlatformColor(platform: VideoPlatform): string {
+  const map: Record<VideoPlatform, string> = {
+    bilibili: "text-cyan-400 bg-cyan-400/10 border-cyan-400/20",
+    youtube: "text-red-400 bg-red-400/10 border-red-400/20",
+    douyin: "text-zinc-100 bg-zinc-700/50 border-zinc-600",
+    kuaishou: "text-orange-400 bg-orange-400/10 border-orange-400/20",
+    xiaohongshu: "text-rose-400 bg-rose-400/10 border-rose-400/20",
+    other: "text-zinc-400 bg-zinc-700/50 border-zinc-600",
+  };
+  return map[platform] ?? map.other;
 }

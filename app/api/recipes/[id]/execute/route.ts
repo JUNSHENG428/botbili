@@ -136,7 +136,6 @@ export async function POST(request: Request, context: RouteContext): Promise<Nex
       recipe_id: recipe.id,
       user_id: user.id,
       status: "pending",
-      progress: 0,
       progress_pct: 0,
       input_overrides: body.input_overrides ?? null,
       command_preview: commandPreview,

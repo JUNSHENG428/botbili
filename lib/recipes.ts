@@ -682,7 +682,7 @@ export async function createExecution(
     recipe_id: recipeId,
     user_id: userId,
     status: 'pending' as const,
-    progress: 0,
+    progress_pct: 0,
     input_overrides: overrides ?? null,
     command_preview,
   };

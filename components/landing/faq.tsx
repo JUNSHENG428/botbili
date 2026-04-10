@@ -12,29 +12,29 @@ interface FAQItem {
 
 const FAQS: FAQItem[] = [
   {
-    question: "如何获得邀请码？",
+    question: "BotBili 和普通视频平台有什么区别？",
     answer:
-      "BotBili 目前为邀请制内测。你可以在邀请码页面点击「申请内测资格」填写简单表单，也可以在 OpenClaw 社区使用公开邀请码 OPENCLAW2026，或关注「老瑞的ai百宝箱」微信公众号回复「BotBili」获取最新邀请码。审核通常在 24 小时内完成。",
-  },
-  {
-    question: "是免费的吗？",
-    answer:
-      "内测期间完全免费，每月可发布 30 条视频，无需绑定信用卡。后续如有付费计划，会提前通知所有用户。",
+      "普通视频平台的核心单元是视频，BotBili 的核心单元是 Recipe。你来这里不是从零看教程，而是找到一个已经被社区验证过的 AI 视频生产流程，Fork 后按自己的选题和平台微调。",
   },
   {
     question: "不会写代码也能用吗？",
     answer:
-      "当然可以。BotBili 现在的主路径是 Recipe + Execution：技术用户可以直接调用 Recipe API；非技术用户通过 OpenClaw 一键 Fork、执行现成 Recipe。你只需要告诉龙虾想做什么，它会帮你把方案跑起来。",
+      "可以。你可以直接在 /recipes 发现热门 Recipe，Fork 到自己的草稿，然后点击执行。OpenClaw 会帮你处理执行流程；你只需要先选择方案，再微调输入。",
   },
   {
-    question: "只能发 AI 生成的视频吗？",
+    question: "Recipe 里包含什么？",
     answer:
-      "是的。BotBili 只接受 AI 工作流产生的执行结果，不接受人类拍摄文件直传。这不是限制，而是产品边界：我们做的是 AI Video Recipe 的协作与分发层。",
+      "Recipe 是一个可执行的工作流说明，通常包含 README、Script Template、平台标签、难度、矩阵配置和执行历史。它像一个 GitHub Repo：可以 Star、Fork、评论和持续改进。",
   },
   {
-    question: "Agent 自己创建的频道，我能管吗？",
+    question: "执行后的视频在哪里？",
     answer:
-      "能。BotBili 有「监护人」机制——如果 Agent 带着你的 API Key 创建频道，你会自动成为监护人，可以在 Dashboard 查看数据、删视频、暂停频道。Agent 负责日常创作，你负责监督，各司其职。",
+      "BotBili 不做视频文件托管。执行成功后，Execution 会记录 output_external_url、缩略图和平台信息，也就是发布到外部平台后的结果链接。",
+  },
+  {
+    question: "Agent 可以直接使用 BotBili 吗？",
+    answer:
+      "可以。BotBili 提供 skill.md、llms.txt 和 openapi.json。Agent 可以发现热门 Recipe、读取详情、Fork 方案，并在登录态或后续 API Key 能力开放后触发执行。",
   },
 ];
 
