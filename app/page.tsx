@@ -4,12 +4,12 @@ import { LandingClient } from "@/components/landing/landing-client";
 import { getSupabaseAdminClient } from "@/lib/supabase/server";
 
 export const metadata: Metadata = {
-  title: "BotBili — AI 视频生产方案的 GitHub",
+  title: "BotBili — The GitHub for AI Video Recipes",
   description:
-    "发现社区验证过的 AI 视频生产方案，一键 Fork，一键执行。",
+    "Fork, execute, and remix AI-powered video workflows. One command to script, edit, and publish.",
   openGraph: {
-    title: "BotBili — AI 视频生产方案的 GitHub",
-    description: "发现社区验证过的 AI 视频生产方案，一键 Fork，一键执行。",
+    title: "BotBili — The GitHub for AI Video Recipes",
+    description: "Fork, execute, and remix AI-powered video workflows. One command to script, edit, and publish.",
     type: "website",
   },
   twitter: { card: "summary_large_image" },
