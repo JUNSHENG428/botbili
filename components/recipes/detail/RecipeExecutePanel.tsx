@@ -122,9 +122,11 @@ function getPollingInterval(elapsedMs: number): number {
 
 function ExecutionStatusBadge({ 
   executionId, 
+  recipe,
   onRetry 
 }: { 
   executionId: string;
+  recipe: Recipe;
   onRetry?: () => void;
 }) {
   const [statusState, setStatusState] = useState<ExecutionStatusPayload | null>(null);
@@ -235,24 +237,31 @@ function ExecutionStatusBadge({
 
       {/* 成功状态：视频预览卡片 */}
       {isCompleted && statusState.output_external_url && (
-        <div className="mt-4 rounded-xl overflow-hidden border border-white/10">
-          <video
-            src={statusState.output_external_url}
-            controls
-            className="w-full max-h-64 object-contain bg-black"
-          />
-          <div className="p-3 flex items-center justify-between bg-white/5">
-            <span className="text-sm text-white/80">执行完成</span>
-            <a
-              href={statusState.output_external_url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-sm text-teal-400 hover:text-teal-300 underline"
-            >
-              在新标签页打开
-            </a>
+        <>
+          <div className="mt-4 rounded-xl overflow-hidden border border-white/10">
+            <video
+              src={statusState.output_external_url}
+              controls
+              className="w-full max-h-64 object-contain bg-black"
+            />
+            <div className="p-3 flex items-center justify-between bg-white/5">
+              <span className="text-sm text-white/80">执行完成</span>
+              <a
+                href={statusState.output_external_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-sm text-teal-400 hover:text-teal-300 underline"
+              >
+                在新标签页打开
+              </a>
+            </div>
           </div>
-        </div>
+          <ExecutionShareCard
+            recipeTitle={recipe.title}
+            recipeSlug={recipe.slug || recipe.id}
+            videoUrl={statusState.output_external_url}
+          />
+        </>
       )}
 
       {/* 成功但未回填链接 */}
@@ -285,6 +294,68 @@ function ExecutionStatusBadge({
       {output && !isCompleted && (
         <RecipeExecutionOutput output={output} status={getOutputStatus(statusState.status)} />
       )}
+    </div>
+  );
+}
+
+interface ExecutionShareCardProps {
+  recipeTitle: string;
+  recipeSlug: string;
+  videoUrl: string;
+}
+
+function ExecutionShareCard({ recipeTitle, recipeSlug, videoUrl }: ExecutionShareCardProps) {
+  const [copied, setCopied] = useState(false);
+  
+  const shareText = `🎬 我刚用 @BotBili 执行了一个 AI 视频 Recipe！\n\n「${recipeTitle}」\n\n📹 ${videoUrl}\n\n#AI视频 #BotBili #AICreator`;
+  
+  const tweetText = encodeURIComponent(shareText);
+
+  async function handleCopy() {
+    try {
+      await navigator.clipboard.writeText(shareText);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // 复制失败静默处理
+    }
+  }
+
+  return (
+    <div className="mt-4 rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4 space-y-3">
+      <div className="flex items-center gap-2">
+        <span className="text-xl">🚀</span>
+        <h4 className="font-semibold text-emerald-300">分享你的成果</h4>
+      </div>
+      
+      <p className="text-sm text-emerald-200/70">
+        帮助更多人发现这个 Recipe，传播飞轮从这里开始
+      </p>
+
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={handleCopy}
+          className="inline-flex items-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-sm font-medium text-emerald-300 transition hover:bg-emerald-500/20"
+        >
+          {copied ? "✅ 已复制" : "📋 复制分享文案"}
+        </button>
+        
+        <a
+          href={`https://twitter.com/intent/tweet?text=${tweetText}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-950/70 px-4 py-2 text-sm font-medium text-zinc-300 transition hover:border-emerald-500/30 hover:text-emerald-300"
+        >
+          🐦 分享到 X
+        </a>
+      </div>
+
+      <div className="rounded-lg border border-emerald-500/10 bg-black/20 p-3">
+        <p className="text-xs text-emerald-200/60 font-mono whitespace-pre-wrap break-all">
+          {shareText}
+        </p>
+      </div>
     </div>
   );
 }
@@ -428,7 +499,8 @@ export function RecipeExecutePanel({
               最近一次执行已创建：<span className="text-zinc-300">{pendingExecution.executionId}</span>
             </p>
             <ExecutionStatusBadge 
-              executionId={pendingExecution.executionId} 
+              executionId={pendingExecution.executionId}
+              recipe={recipe}
               onRetry={onExecute}
             />
           </div>

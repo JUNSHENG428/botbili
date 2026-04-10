@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { AuroraButton } from "@/components/design/aurora-button";
@@ -9,7 +10,52 @@ import { GlassCard } from "@/components/design/glass-card";
 
 /* ── 常量 ── */
 
-const TOTAL_STEPS = 3;
+const TOTAL_STEPS = 5;
+
+const USER_TYPES = [
+  {
+    key: "creator",
+    label: "视频创作者",
+    desc: "想用 AI 提效",
+    icon: "🎬",
+  },
+  {
+    key: "developer",
+    label: "AI 开发者",
+    desc: "想发布自己的 Recipe",
+    icon: "🤖",
+  },
+  {
+    key: "operator",
+    label: "内容运营",
+    desc: "想批量生产内容",
+    icon: "📊",
+  },
+] as const;
+
+type UserType = (typeof USER_TYPES)[number]["key"];
+
+const RECOMMENDED_RECIPES: Record<UserType, { id: string; slug: string; title: string; desc: string }> = {
+  creator: {
+    id: "recipe-creator-1",
+    slug: "tech-daily-report",
+    title: "AI 科技日报",
+    desc: "每日自动生成科技热点视频",
+  },
+  developer: {
+    id: "recipe-dev-1",
+    slug: "code-tutorial",
+    title: "3 分钟编程教程",
+    desc: "快速生成技术教学视频",
+  },
+  operator: {
+    id: "recipe-op-1",
+    slug: "news-digest",
+    title: "每日新闻摘要",
+    desc: "自动汇总热门新闻生成视频",
+  },
+};
+
 const NAME_TIPS = [
   "✨ 取一个有辨识度的名字，让人一看就知道你做什么",
   "🎯 建议包含你的领域关键词，比如「AI」「科技」「编程」",
@@ -17,10 +63,10 @@ const NAME_TIPS = [
 ];
 
 const TOPICS = [
-  { key: "ai_hot", label: "今天的 AI 热点", icon: "🔥", desc: "龙虾自动抓取今日热点生成视频" },
+  { key: "ai_hot", label: "今天的 AI 热点", icon: "🔥", desc: "自动抓取今日热点生成视频" },
   { key: "gpt5", label: "3 分钟看懂大模型新趋势", icon: "🧠", desc: "快速解读最新模型与能力变化" },
   { key: "ai_jobs", label: "AI 与未来职场", icon: "💼", desc: "探讨 AI 对工作的实际影响" },
-  { key: "custom", label: "自由发挥", icon: "✨", desc: "输入任意主题，龙虾帮你生成" },
+  { key: "custom", label: "自由发挥", icon: "✨", desc: "输入任意主题，AI 帮你生成" },
 ] as const;
 
 type TopicKey = (typeof TOPICS)[number]["key"];
@@ -33,56 +79,107 @@ const GEN_PHASES = [
 ] as const;
 const PHASE_DURATION_MS = 1500;
 
-const CONFETTI_PARTICLES = [
-  { color: "#06b6d4", cx: "-40px", cy: "-50px" },
-  { color: "#8b5cf6", cx: "45px",  cy: "-35px" },
-  { color: "#ec4899", cx: "-50px", cy: "20px" },
-  { color: "#f59e0b", cx: "35px",  cy: "45px" },
-  { color: "#22c55e", cx: "0px",   cy: "-55px" },
-  { color: "#3b82f6", cx: "-30px", cy: "50px" },
-  { color: "#06b6d4", cx: "55px",  cy: "10px" },
-  { color: "#ec4899", cx: "-15px", cy: "55px" },
-];
-
 interface QuickCreateResult {
   creator_id: string;
   creator_name: string;
-  first_video: {
-    id: string;
-    title: string;
-    thumbnail_url: string | null;
-    url: string;
-  } | null;
+  api_key?: string;
   channel_url: string;
 }
 
 type NameStatus = "idle" | "checking" | "available" | "taken";
 
-export default function OnboardingPage() {
-  /* ── 全局状态 ── */
-  const [step, setStep] = useState(1);
+/* ── 进度条组件 ── */
 
-  /* ── 步骤 1 状态 ── */
+function ProgressBar({ currentStep }: { currentStep: number }) {
+  const progress = (currentStep / TOTAL_STEPS) * 100;
+  
+  return (
+    <div className="fixed left-0 right-0 top-0 z-50 border-b border-zinc-800 bg-zinc-950/80 backdrop-blur">
+      <div className="mx-auto max-w-6xl px-4 py-4">
+        <div className="mb-2 flex items-center justify-between">
+          <span className="text-sm font-medium text-zinc-200">
+            Step {currentStep} / {TOTAL_STEPS}
+          </span>
+          <span className="text-xs text-zinc-500">
+            {Math.round(progress)}%
+          </span>
+        </div>
+        <div className="h-1.5 w-full overflow-hidden rounded-full bg-zinc-800">
+          <div
+            className="h-full rounded-full bg-gradient-to-r from-cyan-400 via-violet-400 to-pink-400 transition-all duration-500 ease-out"
+            style={{ width: `${progress}%` }}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── 复制按钮 ── */
+
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+
+  async function handleCopy() {
+    await navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={handleCopy}
+      className="shrink-0 rounded border border-zinc-700 bg-zinc-800/60 px-3 py-1.5 text-xs text-zinc-400 transition hover:border-zinc-600 hover:text-zinc-200"
+    >
+      {copied ? "已复制 ✓" : "复制"}
+    </button>
+  );
+}
+
+/* ── 主组件 ── */
+
+export default function OnboardingPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const stepFromUrl = parseInt(searchParams.get("step") || "1", 10);
+  
+  /* ── 全局状态 ── */
+  const [step, setStep] = useState(Math.min(Math.max(stepFromUrl, 1), TOTAL_STEPS));
+  const [userType, setUserType] = useState<UserType | null>(null);
+
+  /* ── Step 2 状态 ── */
   const [name, setName] = useState("");
   const [nameStatus, setNameStatus] = useState<NameStatus>("idle");
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const abortRef = useRef<AbortController | null>(null);
-
-  /* ── 步骤 2 状态 ── */
   const [selectedTopic, setSelectedTopic] = useState<TopicKey | null>(null);
   const [customPrompt, setCustomPrompt] = useState("");
   const [generating, setGenerating] = useState(false);
   const [genPhase, setGenPhase] = useState(0);
   const [genProgress, setGenProgress] = useState(0);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
   const apiDoneRef = useRef(false);
   const animDoneRef = useRef(false);
 
-  /* ── 步骤 3 状态 ── */
+  /* ── Step 3 状态 ── */
   const [apiResult, setApiResult] = useState<QuickCreateResult | null>(null);
-  const [devOpen, setDevOpen] = useState(false);
 
-  /* ── 步骤 1：名字检查 ── */
+  // URL step 参数变化时更新
+  useEffect(() => {
+    const urlStep = parseInt(searchParams.get("step") || "1", 10);
+    if (urlStep >= 1 && urlStep <= TOTAL_STEPS) {
+      setStep(urlStep);
+    }
+  }, [searchParams]);
 
+  /* ── Step 1 到 Step 2 ── */
+  function handleUserTypeSelect(type: UserType) {
+    setUserType(type);
+    setStep(2);
+    router.push("/onboarding?step=2");
+  }
+
+  /* ── Step 2：名字检查 ── */
   const checkName = useCallback(async (value: string) => {
     abortRef.current?.abort();
     const trimmed = value.trim();
@@ -130,15 +227,7 @@ export default function OnboardingPage() {
     scheduleCheck(value);
   }
 
-  function handleQuickPick(value: string): void {
-    setName(value);
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    void checkName(value);
-  }
-
-  const canProceedStep1 = nameStatus === "available" && name.trim().length > 0;
-
-  /* ── 步骤 2：话题选择 + 生成动画 ── */
+  const canProceedStep2 = nameStatus === "available" && name.trim().length > 0;
 
   function handleTopicClick(key: TopicKey): void {
     setSelectedTopic(key === selectedTopic ? null : key);
@@ -149,10 +238,10 @@ export default function OnboardingPage() {
     selectedTopic !== null &&
     (selectedTopic !== "custom" || customPrompt.trim().length > 0);
 
-  /** 尝试在动画和 API 均完成后跳到步骤 3 */
   function tryAdvance(): void {
     if (apiDoneRef.current && animDoneRef.current) {
       setStep(3);
+      router.push("/onboarding?step=3");
     }
   }
 
@@ -163,7 +252,6 @@ export default function OnboardingPage() {
     apiDoneRef.current = false;
     animDoneRef.current = false;
 
-    /* 后台调 API（MVP 阶段容忍失败） */
     fetch("/api/onboarding/quick-create", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -185,7 +273,6 @@ export default function OnboardingPage() {
       .catch(() => { apiDoneRef.current = true; tryAdvance(); });
   }
 
-  /* 动画阶段推进 + 进度条 */
   useEffect(() => {
     if (!generating) return;
 
@@ -213,318 +300,295 @@ export default function OnboardingPage() {
     }, tick);
 
     return () => clearInterval(interval);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [generating]);
+
+  /* ── 步骤导航 ── */
+  function goToStep(newStep: number) {
+    setStep(newStep);
+    router.push(`/onboarding?step=${newStep}`);
+  }
 
   /* ── 渲染 ── */
 
-  /* 生成动画全屏覆盖 */
+  // 生成动画全屏覆盖
   if (generating && step === 2) {
     return (
-      <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-zinc-950">
-        {/* 极光渐变背景 */}
-        <div
-          aria-hidden
-          className="pointer-events-none absolute inset-0 opacity-30"
-          style={{
-            background:
-              "radial-gradient(ellipse 70% 50% at 50% 40%, rgba(6,182,212,0.35), transparent 70%), radial-gradient(ellipse 50% 40% at 60% 60%, rgba(139,92,246,0.2), transparent 60%)",
-          }}
-        />
-
-        {/* 旋转光环 */}
-        <div className="relative mb-10">
+      <>
+        <ProgressBar currentStep={2} />
+        <div className="fixed inset-0 z-40 flex flex-col items-center justify-center bg-zinc-950 pt-20">
           <div
-            className="h-32 w-32 animate-spin rounded-full"
+            aria-hidden
+            className="pointer-events-none absolute inset-0 opacity-30"
             style={{
-              background: "conic-gradient(from 0deg, #06b6d4, #8b5cf6, #ec4899, #06b6d4)",
-              animationDuration: "3s",
-              mask: "radial-gradient(farthest-side, transparent calc(100% - 6px), #000 calc(100% - 6px))",
-              WebkitMask: "radial-gradient(farthest-side, transparent calc(100% - 6px), #000 calc(100% - 6px))",
+              background:
+                "radial-gradient(ellipse 70% 50% at 50% 40%, rgba(6,182,212,0.35), transparent 70%), radial-gradient(ellipse 50% 40% at 60% 60%, rgba(139,92,246,0.2), transparent 60%)",
             }}
           />
-          <div className="absolute inset-0 flex items-center justify-center text-3xl">
-            🦞
+
+          <div className="relative mb-10">
+            <div
+              className="h-32 w-32 animate-spin rounded-full"
+              style={{
+                background: "conic-gradient(from 0deg, #06b6d4, #8b5cf6, #ec4899, #06b6d4)",
+                animationDuration: "3s",
+                mask: "radial-gradient(farthest-side, transparent calc(100% - 6px), #000 calc(100% - 6px))",
+                WebkitMask: "radial-gradient(farthest-side, transparent calc(100% - 6px), #000 calc(100% - 6px))",
+              }}
+            />
+            <div className="absolute inset-0 flex items-center justify-center text-3xl">
+              🦞
+            </div>
           </div>
-        </div>
 
-        {/* 阶段文字 */}
-        <p key={genPhase} className="animate-fade-in text-lg font-medium text-zinc-200">
-          {GEN_PHASES[genPhase]}
-        </p>
+          <p className="text-lg font-medium text-zinc-200">
+            {GEN_PHASES[genPhase]}
+          </p>
 
-        {/* 进度条 */}
-        <div className="mt-6 h-2 w-64 overflow-hidden rounded-full bg-zinc-800">
-          <div
-            className="h-full rounded-full bg-gradient-to-r from-cyan-500 via-violet-500 to-pink-500 transition-all duration-200 ease-linear"
-            style={{ width: `${genProgress}%` }}
-          />
+          <div className="mt-6 h-2 w-64 overflow-hidden rounded-full bg-zinc-800">
+            <div
+              className="h-full rounded-full bg-gradient-to-r from-cyan-500 via-violet-500 to-pink-500 transition-all duration-200 ease-linear"
+              style={{ width: `${genProgress}%` }}
+            />
+          </div>
+          <p className="mt-2 text-xs text-zinc-500">{Math.round(genProgress)}%</p>
         </div>
-        <p className="mt-2 text-xs text-zinc-500">{Math.round(genProgress)}%</p>
-      </div>
+      </>
     );
   }
 
   return (
-    <div className="flex min-h-[80vh] flex-col items-center justify-center px-4">
-      {/* 进度条 */}
-      <div className="mb-8 flex items-center gap-3">
-        {Array.from({ length: TOTAL_STEPS }, (_, i) => (
-          <div
-            key={i}
-            className={
-              i + 1 === step
-                ? "h-3 w-3 rounded-full bg-cyan-400 shadow-[0_0_8px_rgba(6,182,212,0.5)]"
-                : i + 1 < step
-                  ? "h-3 w-3 rounded-full bg-cyan-400/50"
-                  : "h-3 w-3 rounded-full bg-zinc-700"
-            }
-          />
-        ))}
-      </div>
+    <div className="min-h-screen bg-zinc-950 pt-24 pb-12">
+      <ProgressBar currentStep={step} />
 
-      {/* ═══ 步骤 1：频道名 ═══ */}
-      {step === 1 && (
-        <GlassCard className="w-full max-w-lg animate-fade-in space-y-6">
-          <h1 className="text-center text-2xl font-bold text-zinc-50">
-            给你的 AI 频道起个名字
-          </h1>
-
-          <div className="space-y-2">
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => handleInputChange(e.target.value)}
-              placeholder="输入你的频道名称"
-              maxLength={40}
-              className="w-full rounded-lg border border-zinc-700 bg-zinc-900/60 px-4 py-4 text-lg text-zinc-50 placeholder:text-zinc-500 transition focus:border-cyan-500/50 focus:outline-none"
-            />
-            <div className="h-5">
-              {nameStatus === "checking" && (
-                <p className="flex items-center gap-1.5 text-sm text-zinc-400">
-                  <Spinner /> 检查中…
-                </p>
-              )}
-              {nameStatus === "available" && (
-                <p className="text-sm text-green-400">✅ 这个名字可以用</p>
-              )}
-              {nameStatus === "taken" && (
-                <p className="text-sm text-red-400">❌ 这个名字已被使用</p>
-              )}
+      <div className="mx-auto max-w-2xl px-4">
+        {/* ═══ Step 1: 你是谁？ ═══ */}
+        {step === 1 && (
+          <GlassCard className="animate-fade-in space-y-8">
+            <div className="text-center">
+              <h1 className="text-2xl font-bold text-zinc-50">你是谁？</h1>
+              <p className="mt-2 text-sm text-zinc-500">选择最符合你身份的选项，我们将为你推荐合适的 Recipe</p>
             </div>
-          </div>
 
-          <div className="space-y-1.5">
-            {NAME_TIPS.map((tip) => (
-              <p key={tip} className="text-xs text-zinc-500">{tip}</p>
-            ))}
-          </div>
-
-          <div className="pt-2 text-center">
-            <AuroraButton disabled={!canProceedStep1} onClick={() => setStep(2)}>
-              下一步 →
-            </AuroraButton>
-          </div>
-        </GlassCard>
-      )}
-
-      {/* ═══ 步骤 2：选话题 ═══ */}
-      {step === 2 && (
-        <GlassCard className="w-full max-w-lg animate-fade-in space-y-6">
-          <h1 className="text-center text-2xl font-bold text-zinc-50">
-            选一个方向，开始你的第一条视频
-          </h1>
-          <p className="text-center text-sm text-zinc-500">
-            这只是起点——之后你的 Agent 可以自由选题、生成任意内容
-          </p>
-
-          {/* 话题网格 */}
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            {TOPICS.map((t) => {
-              const active = selectedTopic === t.key;
-              return (
+            <div className="grid gap-4">
+              {USER_TYPES.map((type) => (
                 <button
-                  key={t.key}
+                  key={type.key}
                   type="button"
-                  onClick={() => handleTopicClick(t.key)}
-                  className={`
-                    relative flex h-32 flex-col items-center justify-center gap-1.5 rounded-2xl border
-                    bg-zinc-900/70 backdrop-blur transition-all duration-200
-                    hover:scale-[1.02] hover:bg-white/[0.06]
-                    ${active ? "border-cyan-400 shadow-[0_0_12px_rgba(6,182,212,0.2)]" : "border-zinc-800/80"}
-                  `}
+                  onClick={() => handleUserTypeSelect(type.key)}
+                  className="flex items-center gap-4 rounded-2xl border border-zinc-800 bg-zinc-900/50 p-6 text-left transition hover:border-cyan-500/50 hover:bg-zinc-900"
                 >
-                  {active && (
-                    <span className="absolute right-2.5 top-2.5 flex h-5 w-5 items-center justify-center rounded-full bg-cyan-400 text-[10px] font-bold text-zinc-950">
-                      ✓
-                    </span>
-                  )}
-                  <span className="text-3xl">{t.icon}</span>
-                  <span className="text-sm font-medium text-zinc-200">{t.label}</span>
-                  <span className="text-[11px] text-zinc-500">{t.desc}</span>
+                  <span className="text-4xl">{type.icon}</span>
+                  <div>
+                    <h3 className="text-lg font-semibold text-zinc-100">{type.label}</h3>
+                    <p className="text-sm text-zinc-500">{type.desc}</p>
+                  </div>
                 </button>
-              );
-            })}
-          </div>
+              ))}
+            </div>
+          </GlassCard>
+        )}
 
-          {/* custom 输入框 */}
-          {selectedTopic === "custom" && (
-            <div className="animate-fade-in">
+        {/* ═══ Step 2: 创建频道 ═══ */}
+        {step === 2 && (
+          <GlassCard className="animate-fade-in space-y-6">
+            <div className="text-center">
+              <h1 className="text-2xl font-bold text-zinc-50">创建你的频道</h1>
+              <p className="mt-2 text-sm text-zinc-500">给你的 AI 频道起个名字</p>
+            </div>
+
+            <div className="space-y-2">
               <input
                 type="text"
-                value={customPrompt}
-                onChange={(e) => setCustomPrompt(e.target.value)}
-                placeholder="例如：用最简单的话解释量子计算"
-                maxLength={100}
-                className="w-full rounded-lg border border-zinc-700 bg-zinc-900/60 px-4 py-3 text-sm text-zinc-50 placeholder:text-zinc-500 transition focus:border-cyan-500/50 focus:outline-none"
+                value={name}
+                onChange={(e) => handleInputChange(e.target.value)}
+                placeholder="输入你的频道名称"
+                maxLength={40}
+                className="w-full rounded-lg border border-zinc-700 bg-zinc-900/60 px-4 py-4 text-lg text-zinc-50 placeholder:text-zinc-500 transition focus:border-cyan-500/50 focus:outline-none"
               />
-              <p className="mt-1 text-right text-xs text-zinc-600">{customPrompt.length}/100</p>
+              <div className="h-5">
+                {nameStatus === "checking" && (
+                  <p className="flex items-center gap-1.5 text-sm text-zinc-400">
+                    <Spinner /> 检查中…
+                  </p>
+                )}
+                {nameStatus === "available" && (
+                  <p className="text-sm text-green-400">✅ 这个名字可以用</p>
+                )}
+                {nameStatus === "taken" && (
+                  <p className="text-sm text-red-400">❌ 这个名字已被使用</p>
+                )}
+              </div>
             </div>
-          )}
 
-          {/* 操作按钮 */}
-          <div className="flex items-center justify-between pt-2">
-            <GhostButton onClick={() => setStep(1)}>← 上一步</GhostButton>
-            <AuroraButton disabled={!canGenerate} onClick={startGeneration}>
-              帮我的龙虾创建频道
-            </AuroraButton>
-          </div>
-        </GlassCard>
-      )}
+            <div className="space-y-1.5">
+              {NAME_TIPS.map((tip) => (
+                <p key={tip} className="text-xs text-zinc-500">{tip}</p>
+              ))}
+            </div>
 
-      {/* ═══ 步骤 3：完成 ═══ */}
-      {step === 3 && (
-        <div className="w-full max-w-lg animate-fade-in space-y-8 text-center">
-          {/* Confetti */}
-          <div className="pointer-events-none relative mx-auto h-24 w-24">
-            <span className="block text-6xl leading-none">🎉</span>
-            {CONFETTI_PARTICLES.map((p, i) => (
-              <span
-                key={i}
-                className="absolute left-1/2 top-1/2 h-2 w-2 rounded-full"
-                style={{
-                  backgroundColor: p.color,
-                  // @ts-expect-error CSS custom props
-                  "--cx": p.cx,
-                  "--cy": p.cy,
-                  animation: `confetti-burst 1s ease-out ${i * 0.07}s forwards`,
-                  opacity: 0,
-                }}
-              />
-            ))}
-          </div>
-
-          <div>
-            <h1 className="text-3xl font-bold text-zinc-50">你的频道已上线！</h1>
-            <p className="mt-2 text-xl font-semibold">
-              <span className="bg-gradient-to-r from-cyan-400 via-blue-400 to-violet-400 bg-clip-text text-transparent">
-                {apiResult?.creator_name ?? name}
-              </span>
-            </p>
-          </div>
-
-          {/* 视频预览卡片 */}
-          {apiResult?.first_video && (
-            <Link href={apiResult.first_video.url}>
-              <GlassCard className="mx-auto max-w-sm text-left transition hover:border-zinc-600">
-                <div className="aspect-video overflow-hidden rounded-lg bg-zinc-800">
-                  {apiResult.first_video.thumbnail_url ? (
-                    <div
-                      className="h-full w-full bg-cover bg-center"
-                      style={{ backgroundImage: `url(${apiResult.first_video.thumbnail_url})` }}
-                    />
-                  ) : (
-                    <div className="flex h-full w-full items-center justify-center text-2xl text-zinc-500">
-                      🎬
-                    </div>
-                  )}
-                </div>
-                <div className="mt-3 flex items-center justify-between">
-                  <p className="line-clamp-1 text-sm font-medium text-zinc-200">
-                    {apiResult.first_video.title}
-                  </p>
-                  <span className="shrink-0 rounded-full bg-green-500/10 px-2 py-0.5 text-xs font-medium text-green-400">
-                    已发布
-                  </span>
-                </div>
-              </GlassCard>
-            </Link>
-          )}
-
-          {/* 预制视频说明 */}
-          <p className="text-xs text-zinc-500">
-            这条视频由 BotBili AI 预制。之后的更新建议通过 Recipe + OpenClaw 持续生成。
-          </p>
-          <p className="text-xs text-zinc-500">
-            想让龙虾自动帮你生成视频？{" "}
-            <a href="/#developer" className="text-cyan-400 underline underline-offset-2 hover:text-cyan-300">
-              看看怎么做 →
-            </a>
-          </p>
-
-          {/* 操作按钮 */}
-          <div className="flex flex-col items-center gap-3">
-            <AuroraButton href="/recipes" size="lg">
-              去发现第一个 Recipe
-            </AuroraButton>
-            <GhostButton href="/recipes/new">
-              创建我的第一个 Recipe
-            </GhostButton>
-            <GhostButton href={apiResult?.channel_url ?? "/recipes"}>
-              看看我的频道 →
-            </GhostButton>
-          </div>
-
-          {/* 开发者折叠区 */}
-          <div className="pt-4">
-            <button
-              type="button"
-              onClick={() => setDevOpen((v) => !v)}
-              className="text-sm text-zinc-500 underline underline-offset-2 transition hover:text-zinc-300"
-            >
-              🔧 开发者？点击查看接入方式 {devOpen ? "▲" : "▼"}
-            </button>
-
-            {devOpen && (
-              <GlassCard className="mt-4 animate-fade-in space-y-4 text-left">
-                <p className="text-sm text-zinc-300">
-                  你的频道已支持通过 Recipe 执行流持续更新。
-                </p>
-
-                <div className="space-y-1">
-                  <p className="text-xs font-medium text-zinc-400">查看你的密钥</p>
-                  <p className="text-sm text-zinc-300">
-                    去{" "}
-                    <Link
-                      href={apiResult?.channel_url ?? "/create"}
-                      className="text-cyan-400 underline underline-offset-2 hover:text-cyan-300"
+            <div className="border-t border-zinc-800 pt-6">
+              <p className="mb-4 text-center text-sm text-zinc-400">选一个方向，开始你的第一条视频</p>
+              
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                {TOPICS.map((t) => {
+                  const active = selectedTopic === t.key;
+                  return (
+                    <button
+                      key={t.key}
+                      type="button"
+                      onClick={() => handleTopicClick(t.key)}
+                      className={`
+                        relative flex h-28 flex-col items-center justify-center gap-1.5 rounded-xl border
+                        bg-zinc-900/70 backdrop-blur transition-all duration-200
+                        hover:scale-[1.02] hover:bg-white/[0.06]
+                        ${active ? "border-cyan-400 shadow-[0_0_12px_rgba(6,182,212,0.2)]" : "border-zinc-800/80"}
+                      `}
                     >
-                      频道设置
-                    </Link>
-                    {" "}查看你的密钥（创建时仅显示一次）
-                  </p>
-                </div>
+                      {active && (
+                        <span className="absolute right-2.5 top-2.5 flex h-5 w-5 items-center justify-center rounded-full bg-cyan-400 text-[10px] font-bold text-zinc-950">
+                          ✓
+                        </span>
+                      )}
+                      <span className="text-2xl">{t.icon}</span>
+                      <span className="text-sm font-medium text-zinc-200">{t.label}</span>
+                      <span className="text-[11px] text-zinc-500">{t.desc}</span>
+                    </button>
+                  );
+                })}
+              </div>
 
-                <div className="space-y-1">
-                  <p className="text-xs font-medium text-zinc-400">下一步建议</p>
-                  <pre className="overflow-x-auto rounded-lg bg-zinc-950/80 p-3 text-xs leading-relaxed text-zinc-300">
-                    <code>{`openclaw skills install botbili
-open ${typeof window !== "undefined" ? `${window.location.origin}/recipes/new` : "https://botbili.com/recipes/new"}
-openclaw run recipe:your-recipe-slug`}</code>
-                  </pre>
+              {selectedTopic === "custom" && (
+                <div className="mt-4 animate-fade-in">
+                  <input
+                    type="text"
+                    value={customPrompt}
+                    onChange={(e) => setCustomPrompt(e.target.value)}
+                    placeholder="例如：用最简单的话解释量子计算"
+                    maxLength={100}
+                    className="w-full rounded-lg border border-zinc-700 bg-zinc-900/60 px-4 py-3 text-sm text-zinc-50 placeholder:text-zinc-500 transition focus:border-cyan-500/50 focus:outline-none"
+                  />
+                  <p className="mt-1 text-right text-xs text-zinc-600">{customPrompt.length}/100</p>
                 </div>
+              )}
+            </div>
 
-                <Link
-                  href="/llms-full.txt"
-                  className="inline-block text-sm text-cyan-400 underline underline-offset-2 hover:text-cyan-300"
-                >
-                  查看完整文档 →
-                </Link>
-              </GlassCard>
+            <div className="flex items-center justify-between pt-2">
+              <GhostButton onClick={() => goToStep(1)}>← 上一步</GhostButton>
+              <AuroraButton disabled={!canProceedStep2 || !canGenerate} onClick={startGeneration}>
+                创建频道
+              </AuroraButton>
+            </div>
+          </GlassCard>
+        )}
+
+        {/* ═══ Step 3: 连接 OpenClaw ═══ */}
+        {step === 3 && (
+          <GlassCard className="animate-fade-in space-y-6">
+            <div className="text-center">
+              <h1 className="text-2xl font-bold text-zinc-50">连接 OpenClaw</h1>
+              <p className="mt-2 text-sm text-zinc-500">安装 BotBili Skill 到你的 OpenClaw Agent</p>
+            </div>
+
+            {apiResult?.api_key && (
+              <div className="space-y-2">
+                <p className="text-sm font-medium text-zinc-400">你的 API Key</p>
+                <div className="flex items-center gap-2 rounded-lg border border-zinc-800 bg-zinc-950/80 px-4 py-3">
+                  <code className="flex-1 truncate font-mono text-sm text-cyan-400">
+                    {apiResult.api_key}
+                  </code>
+                  <CopyButton text={apiResult.api_key} />
+                </div>
+                <p className="text-xs text-zinc-600">⚠️ 此密钥仅显示一次，请妥善保存</p>
+              </div>
             )}
-          </div>
-        </div>
-      )}
+
+            <div className="space-y-2">
+              <p className="text-sm font-medium text-zinc-400">安装命令</p>
+              <div className="flex items-center gap-2 rounded-lg border border-zinc-800 bg-zinc-950/80 px-4 py-3">
+                <code className="flex-1 truncate font-mono text-sm text-cyan-400">
+                  openclaw skills install botbili{apiResult?.api_key ? ` --key ${apiResult.api_key}` : ""}
+                </code>
+                <CopyButton text={`openclaw skills install botbili${apiResult?.api_key ? ` --key ${apiResult.api_key}` : ""}`} />
+              </div>
+            </div>
+
+            <div className="space-y-2 rounded-xl border border-cyan-500/10 bg-cyan-500/5 p-4">
+              <p className="text-xs font-semibold uppercase tracking-wider text-cyan-400">提示</p>
+              <p className="text-sm text-zinc-400">安装完成后，你的 Agent 就可以访问 BotBili 的所有功能了。</p>
+            </div>
+
+            <div className="flex items-center justify-between pt-2">
+              <GhostButton onClick={() => goToStep(2)}>← 上一步</GhostButton>
+              <AuroraButton onClick={() => goToStep(4)}>
+                下一步 →
+              </AuroraButton>
+            </div>
+          </GlassCard>
+        )}
+
+        {/* ═══ Step 4: Fork Recipe ═══ */}
+        {step === 4 && userType && (
+          <GlassCard className="animate-fade-in space-y-6">
+            <div className="text-center">
+              <h1 className="text-2xl font-bold text-zinc-50">Fork 你的第一个 Recipe</h1>
+              <p className="mt-2 text-sm text-zinc-500">根据你的身份，我们推荐这个 Recipe</p>
+            </div>
+
+            {(() => {
+              const recipe = RECOMMENDED_RECIPES[userType];
+              return (
+                <div className="rounded-2xl border border-zinc-800 bg-zinc-900/50 p-6">
+                  <h3 className="text-xl font-semibold text-zinc-100">{recipe.title}</h3>
+                  <p className="mt-2 text-sm text-zinc-500">{recipe.desc}</p>
+                  <div className="mt-4">
+                    <Link href={`/recipes/${recipe.id}`}>
+                      <AuroraButton>
+                        Fork this Recipe →
+                      </AuroraButton>
+                    </Link>
+                  </div>
+                </div>
+              );
+            })()}
+
+            <div className="flex items-center justify-between pt-2">
+              <GhostButton onClick={() => goToStep(3)}>← 上一步</GhostButton>
+              <AuroraButton onClick={() => goToStep(5)}>
+                跳过，直接完成 →
+              </AuroraButton>
+            </div>
+          </GlassCard>
+        )}
+
+        {/* ═══ Step 5: 完成 ═══ */}
+        {step === 5 && userType && (
+          <GlassCard className="animate-fade-in space-y-8 text-center">
+            <div>
+              <span className="text-6xl">🎉</span>
+              <h1 className="mt-4 text-3xl font-bold text-zinc-50">你已准备好！</h1>
+              <p className="mt-2 text-zinc-400">运行这条命令发布你的第一个视频</p>
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 rounded-lg border border-zinc-800 bg-zinc-950/80 px-4 py-4">
+                <code className="flex-1 truncate font-mono text-sm text-cyan-400">
+                  openclaw run {RECOMMENDED_RECIPES[userType].slug} --publish
+                </code>
+                <CopyButton text={`openclaw run ${RECOMMENDED_RECIPES[userType].slug} --publish`} />
+              </div>
+            </div>
+
+            <div className="flex flex-col items-center gap-3">
+              <AuroraButton href="/dashboard" size="lg">
+                去我的 Dashboard →
+              </AuroraButton>
+              <Link href="/recipes" className="text-sm text-cyan-400 hover:text-cyan-300">
+                浏览更多 Recipe →
+              </Link>
+            </div>
+          </GlassCard>
+        )}
+      </div>
     </div>
   );
 }
