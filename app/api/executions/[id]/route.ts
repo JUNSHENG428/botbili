@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 
 import { extractBearerToken, hashApiKey } from "@/lib/auth";
+import { resolveUser } from "@/lib/executions/resolveUser";
 import { verifyApiKey } from "@/lib/upload-repository";
-import { createClientForServer, getSupabaseAdminClient } from "@/lib/supabase/server";
+import { getSupabaseAdminClient } from "@/lib/supabase/server";
 import { dispatchExecutionCompletedWebhooks } from "@/lib/webhooks/dispatch";
 import type { RecipeExecution, RecipeExecutionOutput, VideoPlatform } from "@/types/recipe";
 
@@ -136,21 +137,16 @@ function parseExecutionOutput(body: unknown): RecipeExecutionOutput {
  * curl "http://localhost:3000/api/executions/EXECUTION_ID"
  */
 export async function GET(_request: Request, context: RouteContext): Promise<NextResponse> {
+  // P14: api-key-auth
   try {
     const { id } = await context.params;
     if (!id) {
       return errorResponse("Execution 标识不能为空", "INVALID_EXECUTION_ID", 400);
     }
 
-    const supabase = await createClientForServer();
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return errorResponse("请先登录", "UNAUTHORIZED", 401);
-    }
+    const resolved = await resolveUser(_request.headers.get("Authorization"));
+    if (!resolved) return errorResponse("请先登录或提供有效 API Key", "UNAUTHORIZED", 401);
+    const userId = resolved.userId;
 
     const admin = getSupabaseAdminClient();
     const { data, error } = await admin
@@ -169,7 +165,8 @@ export async function GET(_request: Request, context: RouteContext): Promise<Nex
 
     const execution = data as RecipeExecution;
 
-    if (execution.user_id !== user.id) {
+    // 所有权校验：使用 resolveAuth 返回的 userId
+    if (execution.user_id !== userId) {
       return errorResponse("你无权查看这个执行记录", "FORBIDDEN", 403);
     }
 

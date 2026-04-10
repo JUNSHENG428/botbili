@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 
-import { verifyCsrfOrigin } from "@/lib/csrf";
+import { verifyCsrfOrBearer } from "@/lib/csrf";
+import { resolveUser } from "@/lib/executions/resolveUser";
 import { calculateRecipeTrendingScore } from "@/lib/recipes";
-import { createClientForServer, getSupabaseAdminClient } from "@/lib/supabase/server";
+import { getSupabaseAdminClient } from "@/lib/supabase/server";
 import type { Recipe } from "@/types/recipe";
 
 type RecipeSort = "trending" | "newest" | "most_starred" | "most_forked" | "most_executed";
@@ -354,20 +355,15 @@ export async function GET(request: Request): Promise<NextResponse> {
 }
 
 export async function POST(request: Request): Promise<NextResponse> {
-  if (!verifyCsrfOrigin(request)) {
+  // P14: api-key-auth
+  if (!verifyCsrfOrBearer(request)) {
     return errorResponse("请求来源校验失败", "CSRF_INVALID", 403);
   }
 
   try {
-    const supabase = await createClientForServer();
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return errorResponse("请先登录", "UNAUTHORIZED", 401);
-    }
+    const resolved = await resolveUser(request.headers.get("Authorization"));
+    if (!resolved) return errorResponse("请先登录或提供有效 API Key", "UNAUTHORIZED", 401);
+    const userId = resolved.userId;
 
     let body: {
       title?: string;
@@ -405,11 +401,15 @@ export async function POST(request: Request): Promise<NextResponse> {
 
     const slug = await generateUniqueSlug(title);
     const admin = getSupabaseAdminClient();
+    
+    // author_type 判断：API Key 鉴权时（creatorId !== null）设为 "ai_agent"，否则检查 header
     const authorType: RecipeAuthorType =
-      request.headers.get("x-botbili-client") === "agent" ? "ai_agent" : "human";
+      resolved.creatorId !== null || request.headers.get("x-botbili-client") === "agent"
+        ? "ai_agent"
+        : "human";
 
     const insertPayload = {
-      author_id: user.id,
+      author_id: userId,
       author_type: authorType,
       slug,
       title,

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
-import { verifyCsrfOrigin } from "@/lib/csrf";
+import { resolveAuth } from "@/lib/auth-utils";
+import { verifyCsrfOrBearer } from "@/lib/csrf";
 import { createClientForServer, getSupabaseAdminClient } from "@/lib/supabase/server";
 import type {
   Recipe,
@@ -260,7 +261,8 @@ export async function GET(request: Request, context: RouteContext): Promise<Next
 }
 
 export async function PATCH(request: Request, context: RouteContext): Promise<NextResponse> {
-  if (!verifyCsrfOrigin(request)) {
+  // P14: api-key-auth
+  if (!verifyCsrfOrBearer(request)) {
     return errorResponse("请求来源校验失败", "CSRF_INVALID", 403);
   }
 
@@ -270,13 +272,8 @@ export async function PATCH(request: Request, context: RouteContext): Promise<Ne
       return errorResponse("Recipe 标识不能为空", "INVALID_RECIPE_ID", 400);
     }
 
-    const supabase = await createClientForServer();
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-
-    if (authError || !user) {
+    const auth = await resolveAuth(request);
+    if (auth.mode === "none") {
       return errorResponse("请先登录", "UNAUTHORIZED", 401);
     }
 
@@ -285,7 +282,8 @@ export async function PATCH(request: Request, context: RouteContext): Promise<Ne
       return errorResponse("Recipe 不存在", "RECIPE_NOT_FOUND", 404);
     }
 
-    if (recipe.author_id !== user.id) {
+    // 所有权校验：使用 resolveAuth 返回的 userId
+    if (recipe.author_id !== auth.userId) {
       return errorResponse("只有作者可以修改 Recipe", "FORBIDDEN", 403);
     }
 

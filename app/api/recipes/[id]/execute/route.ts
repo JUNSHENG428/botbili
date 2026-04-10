@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
 
-import { verifyCsrfOrigin } from "@/lib/csrf";
+import { verifyCsrfOrBearer } from "@/lib/csrf";
 import { startRecipeExecution } from "@/lib/executions/openclaw";
+import { resolveUser } from "@/lib/executions/resolveUser";
 import { updateExecutionById } from "@/lib/executions/updateExecution";
-import { createClientForServer, getSupabaseAdminClient } from "@/lib/supabase/server";
+import { checkRateLimit, getNextHourResetTime } from "@/lib/rate-limit";
+import { getSupabaseAdminClient } from "@/lib/supabase/server";
 import type { Recipe } from "@/types/recipe";
 
 interface RouteContext {
@@ -86,7 +88,8 @@ async function resolveRecipe(identifier: string): Promise<Recipe | null> {
  *   -d '{}'
  */
 export async function POST(request: Request, context: RouteContext): Promise<NextResponse> {
-  if (!verifyCsrfOrigin(request)) {
+  // P14: api-key-auth
+  if (!verifyCsrfOrBearer(request)) {
     return errorResponse("请求来源校验失败", "CSRF_INVALID", 403);
   }
 
@@ -96,14 +99,14 @@ export async function POST(request: Request, context: RouteContext): Promise<Nex
       return errorResponse("Recipe 标识不能为空", "INVALID_RECIPE_ID", 400);
     }
 
-    const supabase = await createClientForServer();
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
+    const resolved = await resolveUser(request.headers.get("Authorization"));
+    if (!resolved) return errorResponse("请先登录或提供有效 API Key", "UNAUTHORIZED", 401);
+    const userId = resolved.userId;
 
-    if (authError || !user) {
-      return errorResponse("请先登录", "UNAUTHORIZED", 401);
+    // 限流检查：每小时最多 10 次
+    const limit = await checkRateLimit(userId, "recipe_execute", 10);
+    if (!limit.allowed) {
+      return errorResponse("超出每小时执行限额", "RATE_LIMITED", 429);
     }
 
     const recipe = await resolveRecipe(id);
@@ -134,7 +137,7 @@ export async function POST(request: Request, context: RouteContext): Promise<Nex
     const admin = getSupabaseAdminClient();
     const insertPayload = {
       recipe_id: recipe.id,
-      user_id: user.id,
+      user_id: userId,  // 使用 resolveAuth 返回的 userId
       status: "pending",
       progress_pct: 0,
       input_overrides: body.input_overrides ?? null,
@@ -154,7 +157,7 @@ export async function POST(request: Request, context: RouteContext): Promise<Nex
 
     await insertAnalyticsEvent({
       event_name: "recipe_execute_success",
-      user_id: user.id,
+      user_id: userId,  // 使用 resolveAuth 返回的 userId
       recipe_id: recipe.id,
       execution_id: execution.id,
     });
@@ -170,7 +173,7 @@ export async function POST(request: Request, context: RouteContext): Promise<Nex
       console.error("startRecipeExecution failed:", dispatchError);
       await insertAnalyticsEvent({
         event_name: "recipe_execute_failed",
-        user_id: user.id,
+        user_id: userId,  // 使用 resolveAuth 返回的 userId
         recipe_id: recipe.id,
         execution_id: execution.id,
         error: dispatchError instanceof Error ? dispatchError.message : "提交到执行引擎失败",
@@ -184,7 +187,7 @@ export async function POST(request: Request, context: RouteContext): Promise<Nex
       return errorResponse("提交到执行引擎失败", "EXECUTION_DISPATCH_FAILED", 502);
     }
 
-    return successResponse(
+    const response = successResponse(
       {
         execution_id: execution.id,
         command_preview: commandPreview,
@@ -192,6 +195,12 @@ export async function POST(request: Request, context: RouteContext): Promise<Nex
       },
       201,
     );
+    
+    // 添加限流响应头
+    response.headers.set("X-RateLimit-Remaining", String(limit.remaining));
+    response.headers.set("X-RateLimit-Reset", String(getNextHourResetTime()));
+    
+    return response;
   } catch (error: unknown) {
     console.error("POST /api/recipes/[id]/execute failed:", error);
     return errorResponse("执行 Recipe 失败", "INTERNAL_ERROR", 500);

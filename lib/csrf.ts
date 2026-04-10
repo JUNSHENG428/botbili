@@ -36,3 +36,19 @@ export function verifyCsrfOrigin(request: Request): boolean {
   // 保守放行，因为 Supabase cookie 已有 SameSite=Lax 保护
   return true;
 }
+
+/**
+ * API Key 请求不需要 CSRF 校验（Bearer token 本身就是 CSRF 防护）。
+ * 浏览器 Session 请求仍然需要校验 Origin。
+ * 
+ * // P14: api-key-auth
+ */
+export function verifyCsrfOrBearer(request: Request): boolean {
+  // 如果 Authorization header 以 "Bearer " 开头 → 直接返回 true
+  if (request.headers.get("authorization")?.startsWith("Bearer ")) {
+    return true;
+  }
+  
+  // 否则走原来的 verifyCsrfOrigin
+  return verifyCsrfOrigin(request);
+}
