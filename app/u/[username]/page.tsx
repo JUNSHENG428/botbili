@@ -4,7 +4,8 @@ import { use, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 
 import { GlassCard } from "@/components/design/glass-card";
-import { RecipeCard } from "@/components/recipes";
+import { GlassTabs } from "@/components/design/glass-tabs";
+import { RecipeCard, RecipeCardSkeleton } from "@/components/recipes";
 import { Button } from "@/components/ui/button";
 import { createClient } from "@/lib/supabase/client";
 import type { Recipe } from "@/types/recipe";
@@ -32,6 +33,8 @@ interface RecipeListItem extends Recipe {
   author: RecipeCardAuthor;
 }
 
+type TabValue = "recipes" | "videos";
+
 function ProfileSkeleton() {
   return (
     <main className="mx-auto min-h-screen max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
@@ -57,7 +60,7 @@ function ProfileSkeleton() {
   );
 }
 
-function EmptyState({ username }: { username: string }) {
+function EmptyRecipesState({ username }: { username: string }) {
   return (
     <GlassCard className="space-y-3 py-12 text-center">
       <div className="space-y-2">
@@ -82,18 +85,53 @@ function EmptyState({ username }: { username: string }) {
   );
 }
 
+function EmptyVideosState({ username }: { username: string }) {
+  return (
+    <GlassCard className="space-y-3 py-12 text-center">
+      <div className="space-y-2">
+        <h2 className="text-xl font-semibold text-zinc-100">这位创作者还没有发布视频</h2>
+        <p className="text-sm text-zinc-500">
+          等待 <span className="text-zinc-300">{username}</span> 执行 Recipe 并发布视频。
+        </p>
+      </div>
+      <div className="flex justify-center gap-3">
+        <Link href="/recipes">
+          <Button type="button" variant="outline" className="border-zinc-700 bg-zinc-950/60">
+            去发现广场
+          </Button>
+        </Link>
+      </div>
+    </GlassCard>
+  );
+}
+
+function VideoCardSkeleton() {
+  return (
+    <GlassCard className="animate-pulse space-y-4">
+      <div className="aspect-video w-full rounded-lg bg-zinc-800" />
+      <div className="space-y-2">
+        <div className="h-5 w-3/4 rounded bg-zinc-800" />
+        <div className="h-4 w-1/2 rounded bg-zinc-900" />
+      </div>
+    </GlassCard>
+  );
+}
+
 export default function UserProfilePage({ params }: UserProfilePageProps) {
   const { username } = use(params);
   const [author, setAuthor] = useState<AuthorSummary | null>(null);
   const [recipes, setRecipes] = useState<RecipeListItem[]>([]);
+  const [videos, setVideos] = useState<Array<{ id: string; title: string; thumbnail_url: string | null; created_at: string }>>([]);
   const [totals, setTotals] = useState({
     recipeCount: 0,
     starCount: 0,
     forkCount: 0,
     execCount: 0,
+    videoCount: 0,
   });
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
+  const [activeTab, setActiveTab] = useState<TabValue>("recipes");
 
   useEffect(() => {
     let active = true;
@@ -108,7 +146,7 @@ export default function UserProfilePage({ params }: UserProfilePageProps) {
 
         const { data: creatorMatch, error: creatorError } = await supabase
           .from("creators")
-          .select("owner_id, slug, name, avatar_url, bio")
+          .select("id, owner_id, slug, name, avatar_url, bio")
           .eq("slug", normalizedUsername)
           .limit(1)
           .maybeSingle();
@@ -120,6 +158,7 @@ export default function UserProfilePage({ params }: UserProfilePageProps) {
         let resolvedAuthor: AuthorSummary | null = null;
         let authorId: string | null = null;
         let authorType: "human" | "ai_agent" = "human";
+        let creatorId: string | null = null;
 
         if (creatorMatch?.owner_id) {
           const { data: profileRow, error: profileError } = await supabase
@@ -133,6 +172,7 @@ export default function UserProfilePage({ params }: UserProfilePageProps) {
           }
 
           authorId = creatorMatch.owner_id as string;
+          creatorId = creatorMatch.id as string;
           authorType = "ai_agent";
           resolvedAuthor = {
             id: authorId,
@@ -166,6 +206,15 @@ export default function UserProfilePage({ params }: UserProfilePageProps) {
           if (profileMatch?.id) {
             authorId = profileMatch.id as string;
             authorType = "human";
+            
+            // Try to find creator record for this user
+            const { data: creatorData } = await supabase
+              .from("creators")
+              .select("id")
+              .eq("owner_id", authorId)
+              .maybeSingle();
+            creatorId = creatorData?.id ?? null;
+            
             resolvedAuthor = {
               id: authorId,
               username: (profileMatch.username as string | null)?.trim() || normalizedUsername,
@@ -184,17 +233,20 @@ export default function UserProfilePage({ params }: UserProfilePageProps) {
           if (active) {
             setAuthor(null);
             setRecipes([]);
+            setVideos([]);
             setTotals({
               recipeCount: 0,
               starCount: 0,
               forkCount: 0,
               execCount: 0,
+              videoCount: 0,
             });
             setNotFound(true);
           }
           return;
         }
 
+        // Fetch recipes
         const baseRecipeQuery = supabase
           .from("recipes")
           .select("*", { count: "exact" })
@@ -225,6 +277,25 @@ export default function UserProfilePage({ params }: UserProfilePageProps) {
           throw new Error(`读取作者 Recipe 列表失败: ${recipeError.message}`);
         }
 
+        // Fetch videos by this creator (if creatorId exists)
+        let videoRows: Array<{ id: string; title: string; thumbnail_url: string | null; created_at: string }> = [];
+        let videoCount = 0;
+        
+        if (creatorId) {
+          const { data: videosData, count: vCount, error: videoError } = await supabase
+            .from("videos")
+            .select("id, title, thumbnail_url, created_at", { count: "exact" })
+            .eq("creator_id", creatorId)
+            .eq("status", "published")
+            .order("created_at", { ascending: false })
+            .limit(12);
+          
+          if (!videoError && videosData) {
+            videoRows = videosData;
+            videoCount = vCount ?? videosData.length;
+          }
+        }
+
         if (!active) {
           return;
         }
@@ -241,22 +312,26 @@ export default function UserProfilePage({ params }: UserProfilePageProps) {
 
         setAuthor(resolvedAuthor);
         setRecipes(nextRecipes);
+        setVideos(videoRows);
         setTotals({
           recipeCount: count ?? summaryRecipes.length,
           starCount: summaryRecipes.reduce((sum, recipe) => sum + (recipe.star_count ?? 0), 0),
           forkCount: summaryRecipes.reduce((sum, recipe) => sum + (recipe.fork_count ?? 0), 0),
           execCount: summaryRecipes.reduce((sum, recipe) => sum + (recipe.exec_count ?? 0), 0),
+          videoCount,
         });
       } catch (error) {
         console.error("load author profile failed:", error);
         if (active) {
           setAuthor(null);
           setRecipes([]);
+          setVideos([]);
           setTotals({
             recipeCount: 0,
             starCount: 0,
             forkCount: 0,
             execCount: 0,
+            videoCount: 0,
           });
           setNotFound(true);
         }
@@ -275,6 +350,14 @@ export default function UserProfilePage({ params }: UserProfilePageProps) {
   }, [username]);
 
   const identityEmoji = useMemo(() => (author?.authorType === "ai_agent" ? "🤖" : "👤"), [author?.authorType]);
+
+  const tabs = useMemo(
+    () => [
+      { value: "recipes", label: `Recipes (${totals.recipeCount})` },
+      { value: "videos", label: `Videos (${totals.videoCount})` },
+    ],
+    [totals.recipeCount, totals.videoCount]
+  );
 
   if (loading) {
     return <ProfileSkeleton />;
@@ -352,31 +435,56 @@ export default function UserProfilePage({ params }: UserProfilePageProps) {
           </div>
         </GlassCard>
 
-        <div className="flex items-center gap-3 border-b border-zinc-800 pb-3">
-          <button
-            type="button"
-            className="rounded-full border border-cyan-500/20 bg-cyan-500/10 px-4 py-2 text-sm font-medium text-cyan-200"
-          >
-            Recipes
-          </button>
-          <button
-            type="button"
-            disabled
-            className="rounded-full border border-zinc-800 bg-zinc-950/60 px-4 py-2 text-sm text-zinc-500"
-            title="第二期开放"
-          >
-            Starred
-          </button>
-        </div>
+        <GlassTabs tabs={tabs} value={activeTab} onChange={(value) => setActiveTab(value as TabValue)} />
 
-        {recipes.length > 0 ? (
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {recipes.map((recipe) => (
-              <RecipeCard key={recipe.id} recipe={recipe} />
-            ))}
-          </div>
-        ) : (
-          <EmptyState username={author.username} />
+        {activeTab === "recipes" && (
+          <>
+            {recipes.length > 0 ? (
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                {recipes.map((recipe) => (
+                  <RecipeCard key={recipe.id} recipe={recipe} />
+                ))}
+              </div>
+            ) : (
+              <EmptyRecipesState username={author.username} />
+            )}
+          </>
+        )}
+
+        {activeTab === "videos" && (
+          <>
+            {videos.length > 0 ? (
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                {videos.map((video) => (
+                  <Link key={video.id} href={`/v/${video.id}`} className="group block">
+                    <GlassCard className="h-full space-y-4 transition duration-200 hover:border-cyan-500/30 hover:bg-zinc-900/85">
+                      <div className="aspect-video w-full overflow-hidden rounded-lg bg-zinc-800">
+                        {video.thumbnail_url ? (
+                          <img
+                            src={video.thumbnail_url}
+                            alt={video.title}
+                            className="h-full w-full object-cover transition duration-200 group-hover:scale-105"
+                          />
+                        ) : (
+                          <div className="flex h-full w-full items-center justify-center text-zinc-600">
+                            <span className="text-4xl">🎬</span>
+                          </div>
+                        )}
+                      </div>
+                      <div className="space-y-1">
+                        <h3 className="line-clamp-2 text-lg font-semibold leading-6 text-zinc-50 transition group-hover:text-cyan-200">
+                          {video.title}
+                        </h3>
+                        <p className="text-xs text-zinc-500">{new Date(video.created_at).toLocaleDateString('zh-CN')}</p>
+                      </div>
+                    </GlassCard>
+                  </Link>
+                ))}
+              </div>
+            ) : (
+              <EmptyVideosState username={author.username} />
+            )}
+          </>
         )}
       </div>
     </main>
