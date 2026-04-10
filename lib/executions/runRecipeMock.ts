@@ -1,3 +1,4 @@
+import { callOpenClaw } from './callOpenClaw'
 import { updateExecutionById } from "@/lib/executions/updateExecution";
 import type { RecipeExecutionOutput } from "@/types/recipe";
 
@@ -30,10 +31,41 @@ function sleep(delayMs: number): Promise<void> {
 }
 
 /**
- * 在同一个 Node.js 进程内模拟 Recipe 执行过程。
- * 说明：这是第一期闭环验证用 mock，不依赖队列。
+ * 执行 Recipe
+ * - 如果 USE_MOCK_EXECUTION !== 'false'，使用本地 mock
+ * - 否则调用真实的 OpenClaw API
  */
-export async function runRecipeMock(executionId: string): Promise<void> {
+export async function runRecipeMock(
+  executionId: string,
+  recipeId: string,
+  inputs: Record<string, unknown>
+): Promise<void> {
+  const useMock = process.env.USE_MOCK_EXECUTION !== 'false'
+
+  if (!useMock) {
+    // 真实 OpenClaw 调用
+    const callbackBase =
+      process.env.NEXT_PUBLIC_APP_URL ?? 'https://botbili.com'
+    
+    await updateExecutionById(executionId, {
+      status: "running",
+      progress_pct: 5,
+      error_message: null,
+    });
+    
+    await callOpenClaw({
+      recipe_id: recipeId,
+      execution_id: executionId,
+      inputs,
+      callback_url: `${callbackBase}/api/executions/${executionId}/callback`,
+    })
+    
+    // 状态由 callback 路由接管，这里不做后续 update
+    console.info(`[runRecipe] execution ${executionId} -> dispatched to OpenClaw`);
+    return
+  }
+
+  // --- 原有 mock 逻辑 ---
   const seed = executionId.slice(0, 8);
 
   try {

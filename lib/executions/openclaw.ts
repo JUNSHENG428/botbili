@@ -121,7 +121,11 @@ export async function startRecipeExecution(input: StartExecutionInput): Promise<
   const driver = getExecutionDriver();
 
   if (driver === "mock") {
-    void runRecipeMock(input.executionId).catch((error) => {
+    void runRecipeMock(
+      input.executionId,
+      input.recipe.id,
+      input.inputOverrides ?? {}
+    ).catch((error) => {
       console.error("runRecipeMock failed:", error);
     });
     return "mock";

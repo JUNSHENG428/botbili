@@ -206,6 +206,45 @@ Authorization: Bearer {creator_api_key}
 
 回填成功后，Execution 会保存 `output` 元数据，并同步兼容字段 `output_external_url`、`output_thumbnail_url`、`output_platform`。
 
+## 执行完成回调
+
+如果你是外部 OpenClaw 执行器（非 mock 模式），执行完成后需要向 BotBili 发送回调：
+
+```text
+POST /api/executions/{execution_id}/callback
+Headers:
+  X-BotBili-Callback-Secret: {OPENCLAW_CALLBACK_SECRET}
+  Content-Type: application/json
+```
+
+请求体：
+
+```json
+{
+  "status": "success",
+  "progress_pct": 100,
+  "output_external_url": "https://www.bilibili.com/video/BVxxxxx",
+  "output_thumbnail_url": "https://...",
+  "output_platform": "bilibili",
+  "error_message": null
+}
+```
+
+字段说明：
+
+- `status`: `success` 或 `failed`
+- `progress_pct`: 0-100 的进度百分比
+- `output_external_url`: 发布后的视频外链（status=success 时必填）
+- `output_thumbnail_url`: 视频封面图 URL（可选）
+- `output_platform`: 发布平台标识（`bilibili`、`youtube`、`douyin` 等）
+- `error_message`: 失败原因（status=failed 时填写）
+
+回调密钥验证：
+
+- 在 HTTP Header 中携带 `X-BotBili-Callback-Secret`
+- 密钥值与 BotBili 服务器配置的 `OPENCLAW_CALLBACK_SECRET` 环境变量一致
+- 验证失败返回 401 Unauthorized
+
 ---
 
 ## Recipe Publishing
