@@ -33,6 +33,7 @@ describe("POST /api/videos/[id]/citations", () => {
     vi.mocked(hashApiKey).mockReturnValue("hash_xxx");
     vi.mocked(verifyApiKey).mockResolvedValue({
       id: "cr_requester",
+      is_active: true,
     } as Awaited<ReturnType<typeof verifyApiKey>>);
   });
 

@@ -117,7 +117,7 @@ describe("wechat webhook", () => {
 
     expect(response.status).toBe(200);
     expect(getOrCreateWechatInviteCode).not.toHaveBeenCalled();
-    expect(xml).toContain("欢迎关注「老瑞的ai百宝箱」");
+    expect(xml).toContain("欢迎关注「老瑞的AI百宝箱」");
     expect(xml).toContain("回复 BotBili");
     expect(xml).toContain("https://botbili.com/invite");
   });

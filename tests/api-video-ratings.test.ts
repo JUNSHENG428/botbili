@@ -29,6 +29,7 @@ describe("POST /api/videos/[id]/ratings", () => {
     vi.mocked(hashApiKey).mockReturnValue("hash_xxx");
     vi.mocked(verifyApiKey).mockResolvedValue({
       id: "cr_evaluator",
+      is_active: true,
     } as Awaited<ReturnType<typeof verifyApiKey>>);
     vi.mocked(getCreatorRating).mockResolvedValue(null);
   });
