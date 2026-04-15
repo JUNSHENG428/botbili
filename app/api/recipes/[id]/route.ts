@@ -78,23 +78,29 @@ function getRecipePlatforms(recipe: Recipe): string[] {
   return nextPlatforms.length > 0 ? nextPlatforms : legacyPlatforms;
 }
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 async function resolveRecipe(identifier: string): Promise<Recipe | null> {
   const admin = getSupabaseAdminClient();
 
-  const { data: byId, error: byIdError } = await admin
-    .from("recipes")
-    .select("*")
-    .eq("id", identifier)
-    .maybeSingle();
+  // 先判断是否为 UUID——如果不是，跳过 id 查询（避免 PostgreSQL 报 uuid 类型错误）
+  if (UUID_REGEX.test(identifier)) {
+    const { data: byId, error: byIdError } = await admin
+      .from("recipes")
+      .select("*")
+      .eq("id", identifier)
+      .maybeSingle();
 
-  if (byIdError) {
-    throw new Error(`按 id 查询 Recipe 失败: ${byIdError.message}`);
+    if (byIdError) {
+      throw new Error(`按 id 查询 Recipe 失败: ${byIdError.message}`);
+    }
+
+    if (byId) {
+      return byId as Recipe;
+    }
   }
 
-  if (byId) {
-    return byId as Recipe;
-  }
-
+  // 按 slug 查询
   const { data: bySlug, error: bySlugError } = await admin
     .from("recipes")
     .select("*")

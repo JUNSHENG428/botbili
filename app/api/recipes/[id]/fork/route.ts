@@ -60,16 +60,23 @@ async function buildUniqueSlug(title: string): Promise<string> {
   throw new Error("生成 fork slug 失败");
 }
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 async function resolveRecipe(identifier: string): Promise<Recipe | null> {
   const admin = getSupabaseAdminClient();
-  const { data: byId, error: byIdError } = await admin
-    .from("recipes")
-    .select("*")
-    .eq("id", identifier)
-    .maybeSingle();
+  // 非 UUID 则跳过 id 查询
+  let byId: Record<string, unknown> | null = null;
+  if (UUID_RE.test(identifier)) {
+    const { data, error: byIdError } = await admin
+      .from("recipes")
+      .select("*")
+      .eq("id", identifier)
+      .maybeSingle();
 
-  if (byIdError) {
-    throw new Error(`按 id 查询 Recipe 失败: ${byIdError.message}`);
+    if (byIdError) {
+      throw new Error(`按 id 查询 Recipe 失败: ${byIdError.message}`);
+    }
+    byId = data as typeof byId;
   }
 
   if (byId) {
