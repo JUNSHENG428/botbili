@@ -4,98 +4,21 @@ import { useState } from "react";
 
 import { GlassCard } from "@/components/design/glass-card";
 import { RecipeExecutionOutput } from "@/components/recipes/detail/RecipeExecutionOutput";
+import {
+  getExecutionFailureSuggestions,
+  getExecutionOutputDisplayStatus,
+  getExecutionStatusClassName,
+  getExecutionStatusDotClassName,
+  getExecutionStatusLabel,
+  isExecutionCompletedStatus,
+  isExecutionFailedStatus,
+} from "@/lib/executions/getExecutionStatusLabel";
+import { normalizeExecutionOutput } from "@/lib/executions/normalizeExecutionOutput";
 import { formatRelativeTime } from "@/lib/format";
-import type {
-  RecipeExecutionOutput as RecipeExecutionOutputData,
-  RecipeExecutionStatus,
-  VideoPlatform,
-} from "@/types/recipe";
-
-interface RecipeExecutionHistoryItem {
-  id: string;
-  status: RecipeExecutionStatus;
-  command_text: string | null;
-  command_preview: string | null;
-  output_external_url: string | null;
-  output_thumbnail_url: string | null;
-  output_platform: string | null;
-  output?: RecipeExecutionOutputData | null;
-  created_at: string;
-  updated_at: string;
-}
+import type { RecipeExecutionHistoryItem as RecipeExecutionHistoryRow } from "@/types/recipe";
 
 interface RecipeExecutionHistoryProps {
-  executions: RecipeExecutionHistoryItem[];
-}
-
-const STATUS_LABELS: Record<RecipeExecutionStatus, string> = {
-  pending: "等待中",
-  running: "执行中",
-  script_done: "脚本完成",
-  edit_done: "剪辑完成",
-  publishing: "发布中",
-  success: "已完成",
-  failed: "失败",
-};
-
-// 状态徽章颜色
-function getStatusDotColor(status: RecipeExecutionStatus): string {
-  switch (status) {
-    case "success":
-      return "bg-emerald-400";
-    case "failed":
-      return "bg-red-400";
-    case "running":
-      return "bg-yellow-400 animate-pulse";
-    case "pending":
-      return "bg-zinc-500";
-    default:
-      return "bg-cyan-400";
-  }
-}
-
-function getStatusClassName(status: RecipeExecutionStatus): string {
-  if (status === "success") {
-    return "border-emerald-500/30 bg-emerald-500/10 text-emerald-300";
-  }
-  if (status === "failed") {
-    return "border-red-500/30 bg-red-500/10 text-red-300";
-  }
-  if (status === "pending") {
-    return "border-zinc-700 bg-zinc-800/80 text-zinc-300";
-  }
-  return "border-cyan-500/30 bg-cyan-500/10 text-cyan-300";
-}
-
-function getOutputStatus(status: RecipeExecutionStatus): "pending" | "running" | "completed" | "failed" {
-  if (status === "success") {
-    return "completed";
-  }
-  if (status === "failed") {
-    return "failed";
-  }
-  if (status === "pending") {
-    return "pending";
-  }
-  return "running";
-}
-
-function normalizeExecutionOutput(execution: RecipeExecutionHistoryItem): RecipeExecutionOutputData | null {
-  if (execution.output) {
-    return execution.output;
-  }
-
-  if (!execution.output_external_url || !execution.output_platform) {
-    return null;
-  }
-
-  return {
-    platform: execution.output_platform as VideoPlatform,
-    video_url: execution.output_external_url,
-    title: "执行产出",
-    thumbnail_url: execution.output_thumbnail_url ?? undefined,
-    published_at: execution.updated_at,
-  };
+  executions: RecipeExecutionHistoryRow[];
 }
 
 const PAGE_SIZE = 10;
@@ -128,16 +51,19 @@ export function RecipeExecutionHistory({ executions }: RecipeExecutionHistoryPro
       ) : (
         <div className="space-y-3">
           {paginated.map((execution) => {
-            const output = normalizeExecutionOutput(execution);
+            const output = normalizeExecutionOutput(execution, "执行产出");
             const isExpanded = Boolean(expanded[execution.id]);
-            const canShowOutput = execution.status === "success" && Boolean(output);
+            const canShowOutput = isExecutionCompletedStatus(execution.status) && Boolean(output);
+            const failureSuggestions = isExecutionFailedStatus(execution.status)
+              ? getExecutionFailureSuggestions(execution.error_message)
+              : [];
 
             return (
               <GlassCard key={execution.id} className="space-y-4 p-4">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div className="flex items-center gap-3">
                     {/* 状态圆点徽章 */}
-                    <div className={`w-2.5 h-2.5 rounded-full ${getStatusDotColor(execution.status)}`} />
+                    <div className={`w-2.5 h-2.5 rounded-full ${getExecutionStatusDotClassName(execution.status)}`} />
                     
                     <div className="space-y-1">
                       <p className="text-sm font-medium text-zinc-200">{formatRelativeTime(execution.created_at)}</p>
@@ -148,8 +74,8 @@ export function RecipeExecutionHistory({ executions }: RecipeExecutionHistoryPro
                   </div>
 
                   <div className="flex items-center gap-2">
-                    <span className={`rounded-full border px-2.5 py-1 text-xs ${getStatusClassName(execution.status)}`}>
-                      {STATUS_LABELS[execution.status]}
+                    <span className={`rounded-full border px-2.5 py-1 text-xs ${getExecutionStatusClassName(execution.status)}`}>
+                      {getExecutionStatusLabel(execution.status)}
                     </span>
                     {canShowOutput ? (
                       <button
@@ -168,12 +94,34 @@ export function RecipeExecutionHistory({ executions }: RecipeExecutionHistoryPro
                   </div>
                 </div>
 
-                {canShowOutput && isExpanded ? (
-                  <RecipeExecutionOutput output={output} status={getOutputStatus(execution.status)} />
+                {execution.status === "pending" ? (
+                  <p className="text-xs leading-6 text-zinc-500">
+                    这条记录已经创建成功，正在等待本地 Agent 主动领取。
+                  </p>
                 ) : null}
 
-                {execution.status === "success" && !output ? (
+                {canShowOutput && isExpanded ? (
+                  <RecipeExecutionOutput
+                    output={output}
+                    status={getExecutionOutputDisplayStatus(execution.status)}
+                  />
+                ) : null}
+
+                {isExecutionCompletedStatus(execution.status) && !output ? (
                   <RecipeExecutionOutput output={null} status="completed" />
+                ) : null}
+
+                {isExecutionFailedStatus(execution.status) ? (
+                  <div className="rounded-xl border border-red-500/15 bg-red-500/5 p-3 text-xs leading-6 text-red-100/80">
+                    <p className="font-medium text-red-300">
+                      {execution.error_message ?? "执行失败，当前没有可展示的发布结果。"}
+                    </p>
+                    <div className="mt-2 space-y-1">
+                      {failureSuggestions.map((suggestion) => (
+                        <p key={suggestion}>• {suggestion}</p>
+                      ))}
+                    </div>
+                  </div>
                 ) : null}
               </GlassCard>
             );

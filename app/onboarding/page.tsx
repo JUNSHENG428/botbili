@@ -7,6 +7,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { AuroraButton } from "@/components/design/aurora-button";
 import { GhostButton } from "@/components/design/ghost-button";
 import { GlassCard } from "@/components/design/glass-card";
+import { FirstRecipeGuide } from "@/components/onboarding/FirstRecipeGuide";
 
 /* ── 常量 ── */
 
@@ -365,8 +366,11 @@ export default function OnboardingPage() {
         {step === 1 && (
           <GlassCard className="animate-fade-in space-y-8">
             <div className="text-center">
-              <h1 className="text-2xl font-bold text-zinc-50">你是谁？</h1>
-              <p className="mt-2 text-sm text-zinc-500">选择最符合你身份的选项，我们将为你推荐合适的 Recipe</p>
+              <p className="text-xs uppercase tracking-[0.24em] text-cyan-300/80">First Run</p>
+              <h1 className="mt-3 text-2xl font-bold text-zinc-50">5 步跑通你的第一条结果</h1>
+              <p className="mt-2 text-sm text-zinc-500">
+                先选你的目标，我们会推荐更容易跑通的第一条 Recipe。你不需要先学会剪辑，也不需要从零写工作流。
+              </p>
             </div>
 
             <div className="grid gap-4">
@@ -392,8 +396,8 @@ export default function OnboardingPage() {
         {step === 2 && (
           <GlassCard className="animate-fade-in space-y-6">
             <div className="text-center">
-              <h1 className="text-2xl font-bold text-zinc-50">创建你的频道</h1>
-              <p className="mt-2 text-sm text-zinc-500">给你的 AI 频道起个名字</p>
+              <h1 className="text-2xl font-bold text-zinc-50">准备你的 BotBili 身份</h1>
+              <p className="mt-2 text-sm text-zinc-500">先创建频道，后面执行成功时 Agent 才能把结果回填到你的空间里。</p>
             </div>
 
             <div className="space-y-2">
@@ -401,7 +405,7 @@ export default function OnboardingPage() {
                 type="text"
                 value={name}
                 onChange={(e) => handleInputChange(e.target.value)}
-                placeholder="输入你的频道名称"
+                placeholder="输入你的频道名称，例如 AI 热点日报"
                 maxLength={40}
                 className="w-full rounded-lg border border-zinc-700 bg-zinc-900/60 px-4 py-4 text-lg text-zinc-50 placeholder:text-zinc-500 transition focus:border-cyan-500/50 focus:outline-none"
               />
@@ -427,7 +431,7 @@ export default function OnboardingPage() {
             </div>
 
             <div className="border-t border-zinc-800 pt-6">
-              <p className="mb-4 text-center text-sm text-zinc-400">选一个方向，开始你的第一条视频</p>
+              <p className="mb-4 text-center text-sm text-zinc-400">选一个方向，让 BotBili 先给你准备第一条内容</p>
               
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 {TOPICS.map((t) => {
@@ -475,7 +479,7 @@ export default function OnboardingPage() {
             <div className="flex items-center justify-between pt-2">
               <GhostButton onClick={() => goToStep(1)}>← 上一步</GhostButton>
               <AuroraButton disabled={!canProceedStep2 || !canGenerate} onClick={startGeneration}>
-                创建频道
+                下一步：连接 Agent
               </AuroraButton>
             </div>
           </GlassCard>
@@ -485,8 +489,8 @@ export default function OnboardingPage() {
         {step === 3 && (
           <GlassCard className="animate-fade-in space-y-6">
             <div className="text-center">
-              <h1 className="text-2xl font-bold text-zinc-50">连接 OpenClaw</h1>
-              <p className="mt-2 text-sm text-zinc-500">安装 BotBili Skill 到你的 OpenClaw Agent</p>
+              <h1 className="text-2xl font-bold text-zinc-50">连接 Agent</h1>
+              <p className="mt-2 text-sm text-zinc-500">只做这一件事：把 BotBili Skill 装进 OpenClaw。装好以后，Agent 才能领取 execution。</p>
             </div>
 
             {apiResult?.api_key && (
@@ -514,13 +518,13 @@ export default function OnboardingPage() {
 
             <div className="space-y-2 rounded-xl border border-cyan-500/10 bg-cyan-500/5 p-4">
               <p className="text-xs font-semibold uppercase tracking-wider text-cyan-400">提示</p>
-              <p className="text-sm text-zinc-400">安装完成后，你的 Agent 就可以访问 BotBili 的所有功能了。</p>
+              <p className="text-sm text-zinc-400">安装完成后，你的 Agent 就能执行公开 Recipe，并把公开视频结果回填回来。</p>
             </div>
 
             <div className="flex items-center justify-between pt-2">
               <GhostButton onClick={() => goToStep(2)}>← 上一步</GhostButton>
               <AuroraButton onClick={() => goToStep(4)}>
-                下一步 →
+                下一步：选第一条 Recipe →
               </AuroraButton>
             </div>
           </GlassCard>
@@ -530,31 +534,18 @@ export default function OnboardingPage() {
         {step === 4 && userType && (
           <GlassCard className="animate-fade-in space-y-6">
             <div className="text-center">
-              <h1 className="text-2xl font-bold text-zinc-50">Fork 你的第一个 Recipe</h1>
-              <p className="mt-2 text-sm text-zinc-500">根据你的身份，我们推荐这个 Recipe</p>
+              <h1 className="text-2xl font-bold text-zinc-50">选一条最容易跑通的 Recipe</h1>
+              <p className="mt-2 text-sm text-zinc-500">
+                第一条不要贪多。先挑步骤少、成功率高、有人公开回填结果的 Recipe，拿到第一个成功闭环。
+              </p>
             </div>
 
-            {(() => {
-              const recipe = RECOMMENDED_RECIPES[userType];
-              return (
-                <div className="rounded-2xl border border-zinc-800 bg-zinc-900/50 p-6">
-                  <h3 className="text-xl font-semibold text-zinc-100">{recipe.title}</h3>
-                  <p className="mt-2 text-sm text-zinc-500">{recipe.desc}</p>
-                  <div className="mt-4">
-                    <Link href={`/recipes/${recipe.id}`}>
-                      <AuroraButton>
-                        Fork this Recipe →
-                      </AuroraButton>
-                    </Link>
-                  </div>
-                </div>
-              );
-            })()}
+            <FirstRecipeGuide />
 
             <div className="flex items-center justify-between pt-2">
               <GhostButton onClick={() => goToStep(3)}>← 上一步</GhostButton>
               <AuroraButton onClick={() => goToStep(5)}>
-                跳过，直接完成 →
+                我已选好 Recipe →
               </AuroraButton>
             </div>
           </GlassCard>
@@ -565,8 +556,8 @@ export default function OnboardingPage() {
           <GlassCard className="animate-fade-in space-y-8 text-center">
             <div>
               <span className="text-6xl">🎉</span>
-              <h1 className="mt-4 text-3xl font-bold text-zinc-50">你已准备好！</h1>
-              <p className="mt-2 text-zinc-400">运行这条命令发布你的第一个视频</p>
+              <h1 className="mt-4 text-3xl font-bold text-zinc-50">执行并分享你的第一条结果</h1>
+              <p className="mt-2 text-zinc-400">先执行，再把结果页或公开视频分享出去，形成你的第一条可验证样本。</p>
             </div>
 
             <div className="space-y-2">
@@ -578,12 +569,23 @@ export default function OnboardingPage() {
               </div>
             </div>
 
+            <div className="rounded-2xl border border-zinc-800 bg-zinc-900/50 p-5 text-left">
+              <p className="text-sm font-semibold text-zinc-100">下一步只做两件事</p>
+              <div className="mt-3 space-y-2 text-sm leading-7 text-zinc-500">
+                <p>1. 去 Recipe 详情页点击 Execute，确认 execution 状态开始滚动。</p>
+                <p>2. 执行完成后，复制结果页链接或公开视频链接分享，带上 Made with BotBili 回流信息。</p>
+              </div>
+            </div>
+
             <div className="flex flex-col items-center gap-3">
-              <AuroraButton href="/dashboard" size="lg">
-                去我的 Dashboard →
+              <AuroraButton
+                href={`/recipes/${RECOMMENDED_RECIPES[userType].slug || RECOMMENDED_RECIPES[userType].id}`}
+                size="lg"
+              >
+                去执行第一条 Recipe →
               </AuroraButton>
-              <Link href="/recipes" className="text-sm text-cyan-400 hover:text-cyan-300">
-                浏览更多 Recipe →
+              <Link href="/dashboard" className="text-sm text-cyan-400 hover:text-cyan-300">
+                先去看 Dashboard →
               </Link>
             </div>
           </GlassCard>

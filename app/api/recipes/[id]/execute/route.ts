@@ -1,10 +1,11 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 
 import { verifyCsrfOrBearer } from "@/lib/csrf";
 import { startRecipeExecution } from "@/lib/executions/openclaw";
 import { resolveUser } from "@/lib/executions/resolveUser";
 import { updateExecutionById } from "@/lib/executions/updateExecution";
 import { checkRateLimit, getNextHourResetTime } from "@/lib/rate-limit";
+import { recalculateRecipeStats } from "@/lib/recipe-stats";
 import { getSupabaseAdminClient } from "@/lib/supabase/server";
 import type { Recipe } from "@/types/recipe";
 
@@ -160,6 +161,14 @@ export async function POST(request: Request, context: RouteContext): Promise<Nex
       user_id: userId,  // 使用 resolveAuth 返回的 userId
       recipe_id: recipe.id,
       execution_id: execution.id,
+    });
+
+    after(async () => {
+      try {
+        await recalculateRecipeStats(recipe.id);
+      } catch (recalculateError) {
+        console.error("POST /api/recipes/[id]/execute recalculateRecipeStats failed:", recalculateError);
+      }
     });
 
     try {

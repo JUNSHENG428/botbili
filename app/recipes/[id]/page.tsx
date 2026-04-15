@@ -6,24 +6,22 @@ import Link from "next/link";
 
 import { GlassCard } from "@/components/design/glass-card";
 import { RecipePublishButton } from "@/components/recipes/RecipePublishButton";
+import { RecipeShareActions } from "@/components/recipes/RecipeShareActions";
 import { RecipeShareButton } from "@/components/recipes/RecipeShareButton";
 import { RecipeComments } from "@/components/recipes/comments";
 import { RecipeExecutePanel } from "@/components/recipes/detail/RecipeExecutePanel";
 import { RecipeExecutionHistory } from "@/components/recipes/detail/RecipeExecutionHistory";
-import { RecipeExecutionOutput } from "@/components/recipes/detail/RecipeExecutionOutput";
 import { RecipeHeader } from "@/components/recipes/detail/RecipeHeader";
+import { RecipeOutputsGallery } from "@/components/recipes/detail/RecipeOutputsGallery";
 import { RecipeStoryboard } from "@/components/recipes/detail/RecipeStoryboard";
+import { RecipeWhyTrending } from "@/components/recipes/detail/RecipeWhyTrending";
+import { ForkFamilyList } from "@/components/recipes/ForkFamilyList";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
 import { track } from "@/lib/analytics";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
-import type {
-  Recipe,
-  RecipeExecutionOutput as RecipeExecutionOutputData,
-  RecipeExecutionStatus,
-  VideoPlatform,
-} from "@/types/recipe";
+import type { Recipe, RecipeExecutionHistoryItem } from "@/types/recipe";
 
 interface RecipeDetailPageProps {
   params: Promise<{ id: string }>;
@@ -34,19 +32,6 @@ interface RecipeAuthor {
   display_name: string | null;
   avatar_url: string | null;
   author_type: "human" | "ai_agent";
-}
-
-interface RecipeExecutionHistoryItem {
-  id: string;
-  status: RecipeExecutionStatus;
-  command_text: string | null;
-  command_preview: string | null;
-  output_external_url: string | null;
-  output_thumbnail_url: string | null;
-  output_platform: string | null;
-  output: RecipeExecutionOutputData | null;
-  created_at: string;
-  updated_at: string;
 }
 
 interface RecipeDetailPayload {
@@ -78,6 +63,13 @@ interface ForkSourceSummary {
 interface PendingExecutionState {
   executionId: string;
   commandPreview: string;
+}
+
+function getLatestPublicResult(executions: RecipeExecutionHistoryItem[]) {
+  return executions.find(
+    (execution) =>
+      typeof execution.output_external_url === "string" && execution.output_external_url.trim().length > 0,
+  );
 }
 
 function renderReadmeBlocks(value: Record<string, unknown> | string | null) {
@@ -197,24 +189,6 @@ function RecipeDetailError({
       </GlassCard>
     </main>
   );
-}
-
-function getExecutionOutput(execution: RecipeExecutionHistoryItem): RecipeExecutionOutputData | null {
-  if (execution.output) {
-    return execution.output;
-  }
-
-  if (!execution.output_external_url || !execution.output_platform) {
-    return null;
-  }
-
-  return {
-    platform: execution.output_platform as VideoPlatform,
-    video_url: execution.output_external_url,
-    title: "执行产出",
-    thumbnail_url: execution.output_thumbnail_url ?? undefined,
-    published_at: execution.updated_at,
-  };
 }
 
 export default function RecipeDetailPage({ params }: RecipeDetailPageProps) {
@@ -476,10 +450,17 @@ export default function RecipeDetailPage({ params }: RecipeDetailPageProps) {
   const readmeBlocks = renderReadmeBlocks(recipe.readme_json);
   const fallbackReadmeRecipe = readmeBlocks.length > 0 ? recipe : { ...recipe, readme_json: recipe.readme_md || recipe.description };
   const isAuthor = Boolean(userId && recipe.author_id === userId);
-  const latestOutputs = recentExecutions
-    .map((execution) => ({ id: execution.id, output: getExecutionOutput(execution) }))
-    .filter((item): item is { id: string; output: RecipeExecutionOutputData } => Boolean(item.output))
-    .slice(0, 3);
+  const latestPublicResult = getLatestPublicResult(recentExecutions);
+  const previewImageUrl =
+    latestPublicResult?.output?.gif_url ??
+    latestPublicResult?.output?.thumbnail_url ??
+    latestPublicResult?.output_thumbnail_url ??
+    null;
+  const resultTitle =
+    latestPublicResult?.output?.title ??
+    (latestPublicResult?.output_external_url ? `${recipe.title} 执行结果` : recipe.title);
+  const resultPlatform =
+    latestPublicResult?.output?.platform ?? latestPublicResult?.output_platform ?? null;
 
   return (
     <main className="mx-auto min-h-screen max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
@@ -488,30 +469,42 @@ export default function RecipeDetailPage({ params }: RecipeDetailPageProps) {
           <RecipeHeader
             recipe={recipe}
             forkSource={forkSource}
-            actions={<RecipeShareButton recipeId={recipe.id} recipeTitle={recipe.title} recipeSlug={recipe.slug} />}
+            actions={
+              <RecipeShareButton
+                recipeId={recipe.id}
+                recipeTitle={recipe.title}
+                recipeSlug={recipe.slug || recipe.id}
+              />
+            }
           />
 
-          {latestOutputs.length > 0 ? (
-            <section className="space-y-4">
-              <div className="space-y-1">
-                <h2 className="text-xl font-semibold text-zinc-100">最新产出</h2>
-                <p className="text-sm text-zinc-500">
-                  Agent 已经把这些执行结果发布到外部平台，BotBili 只展示可追溯的结果卡片。
-                </p>
-              </div>
-              <div className="grid gap-4 lg:grid-cols-3">
-                {latestOutputs.map((item) => (
-                  <RecipeExecutionOutput key={item.id} output={item.output} status="completed" />
-                ))}
-              </div>
-            </section>
-          ) : null}
+          <RecipeWhyTrending recipe={recipe} />
+
+          <RecipeOutputsGallery recipeId={recipe.id} />
+
+          <RecipeShareActions
+            recipeTitle={recipe.title}
+            recipeSlug={recipe.slug || recipe.id}
+            resultUrl={latestPublicResult?.output_external_url ?? null}
+            resultTitle={resultTitle}
+            resultPlatform={resultPlatform}
+            previewImageUrl={previewImageUrl}
+          />
 
           <RecipeReadmeSection recipe={fallbackReadmeRecipe} />
 
           <RecipeStoryboard scriptTemplate={recipe.script_template} isAuthor={isAuthor} />
 
           <RecipeExecutionHistory executions={recentExecutions} />
+
+          {recipe.fork_count > 0 ? (
+            <section className="mt-8 space-y-3">
+              <h3 className="text-sm font-medium text-zinc-400">
+                {recipe.fork_count} 个基于此 Recipe 的衍生版本
+              </h3>
+              <ForkFamilyList recipeId={recipe.id} />
+            </section>
+          ) : null}
 
           <RecipeComments recipeId={recipe.id} />
         </div>

@@ -1,8 +1,11 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 
 import { verifyCsrfOrBearer } from "@/lib/csrf";
 import { resolveUser } from "@/lib/executions/resolveUser";
 import { calculateRecipeTrendingScore } from "@/lib/recipes";
+import { calculateRecipeScore } from "@/lib/recipe-stats";
+import { buildRecipeAuthorMap } from "@/lib/recipe-authors";
+import { awardPoints } from "@/lib/reputation";
 import { getSupabaseAdminClient } from "@/lib/supabase/server";
 import type { Recipe } from "@/types/recipe";
 
@@ -23,19 +26,17 @@ interface RecipeListItem extends Recipe {
   author: RecipeAuthorSummary;
 }
 
-interface ProfileRow {
-  id: string;
-  username: string | null;
-  display_name: string | null;
-  avatar_url: string | null;
+interface RecipeExecutionSignalRow {
+  recipe_id: string;
+  status: string;
+  created_at: string;
+  output_external_url: string | null;
 }
 
-interface CreatorRow {
-  id: string;
-  owner_id: string;
-  slug: string | null;
-  name: string;
-  avatar_url: string | null;
+interface RecipeExecutionAggregate {
+  completedExecutionCount: number;
+  outputCount: number;
+  recentExecutionCount: number;
 }
 
 const VALID_SORTS: RecipeSort[] = ["trending", "newest", "most_starred", "most_forked", "most_executed"];
@@ -133,64 +134,82 @@ async function generateUniqueSlug(title: string): Promise<string> {
 }
 
 async function buildAuthorMap(recipes: Recipe[]): Promise<Map<string, RecipeAuthorSummary>> {
-  const authorIds = [...new Set(recipes.map((recipe) => recipe.author_id))];
-  const authorMap = new Map<string, RecipeAuthorSummary>();
+  return buildRecipeAuthorMap(recipes);
+}
 
-  if (authorIds.length === 0) {
-    return authorMap;
+async function buildExecutionAggregateMap(recipeIds: string[]): Promise<Map<string, RecipeExecutionAggregate>> {
+  const nextRecipeIds = [...new Set(recipeIds.filter(Boolean))];
+  if (nextRecipeIds.length === 0) {
+    return new Map();
   }
 
   const admin = getSupabaseAdminClient();
+  const { data, error } = await admin
+    .from("recipe_executions")
+    .select("recipe_id, status, created_at, output_external_url")
+    .in("recipe_id", nextRecipeIds)
+    .returns<RecipeExecutionSignalRow[]>();
 
-  const [{ data: profileRows, error: profileError }, { data: creatorRows, error: creatorError }] = await Promise.all([
-    admin.from("profiles").select("id, username, display_name, avatar_url").in("id", authorIds),
-    admin.from("creators").select("id, owner_id, slug, name, avatar_url").in("owner_id", authorIds),
-  ]);
-
-  if (profileError) {
-    throw new Error(`加载作者资料失败: ${profileError.message}`);
+  if (error) {
+    throw new Error(`recipe execution aggregate lookup failed: ${error.message}`);
   }
 
-  if (creatorError) {
-    throw new Error(`加载创作者资料失败: ${creatorError.message}`);
-  }
+  const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+  const aggregateMap = new Map<string, RecipeExecutionAggregate>();
 
-  const profileMap = new Map<string, ProfileRow>();
-  for (const row of (profileRows ?? []) as ProfileRow[]) {
-    profileMap.set(row.id, row);
-  }
-
-  const creatorMap = new Map<string, CreatorRow>();
-  for (const row of (creatorRows ?? []) as CreatorRow[]) {
-    if (!creatorMap.has(row.owner_id)) {
-      creatorMap.set(row.owner_id, row);
-    }
-  }
-
-  for (const recipe of recipes) {
-    if (authorMap.has(recipe.author_id)) {
-      continue;
-    }
-
-    const profile = profileMap.get(recipe.author_id);
-    const creator = creatorMap.get(recipe.author_id);
-
-    const username =
-      profile?.username?.trim() ||
-      creator?.slug?.trim() ||
-      profile?.display_name?.trim()?.toLowerCase().replace(/\s+/g, "-") ||
-      `user-${recipe.author_id.slice(0, 8)}`;
-
-    authorMap.set(recipe.author_id, {
-      id: recipe.author_id,
-      username,
-      display_name: profile?.display_name ?? creator?.name ?? null,
-      avatar_url: profile?.avatar_url ?? creator?.avatar_url ?? null,
-      author_type: recipe.author_type,
+  for (const recipeId of nextRecipeIds) {
+    aggregateMap.set(recipeId, {
+      completedExecutionCount: 0,
+      outputCount: 0,
+      recentExecutionCount: 0,
     });
   }
 
-  return authorMap;
+  for (const row of data ?? []) {
+    if (row.status === "cancelled") {
+      continue;
+    }
+
+    const aggregate = aggregateMap.get(row.recipe_id);
+    if (!aggregate) {
+      continue;
+    }
+
+    if (row.status === "success" || row.status === "completed") {
+      aggregate.completedExecutionCount += 1;
+    }
+
+    if (typeof row.output_external_url === "string" && row.output_external_url.trim().length > 0) {
+      aggregate.outputCount += 1;
+    }
+
+    const timestamp = new Date(row.created_at).getTime();
+    if (Number.isFinite(timestamp) && timestamp >= sevenDaysAgo) {
+      aggregate.recentExecutionCount += 1;
+    }
+  }
+
+  return aggregateMap;
+}
+
+function enrichRecipe(recipe: Recipe, aggregate?: RecipeExecutionAggregate): Recipe {
+  const outputCount = aggregate?.outputCount ?? recipe.output_count ?? 0;
+  const recentExecutionCount = aggregate?.recentExecutionCount ?? recipe.recent_execution_count ?? 0;
+
+  return {
+    ...recipe,
+    completed_execution_count: aggregate?.completedExecutionCount ?? recipe.completed_execution_count ?? 0,
+    output_count: outputCount,
+    recent_execution_count: recentExecutionCount,
+    effect_score: calculateRecipeScore({
+      starCount: recipe.star_count ?? 0,
+      forkCount: recipe.fork_count ?? 0,
+      executionCount: recipe.execution_count ?? recipe.exec_count ?? 0,
+      successRate: Number(recipe.success_rate ?? 0),
+      outputCount,
+      recentExecutionCount,
+    }),
+  };
 }
 
 /**
@@ -209,6 +228,7 @@ export async function GET(request: Request): Promise<NextResponse> {
     const category = searchParams.get("category")?.trim() ?? "";
     const difficulty = searchParams.get("difficulty")?.trim() ?? "";
     const tag = searchParams.get("tag")?.trim() ?? "";
+    const forkedFrom = searchParams.get("forked_from")?.trim() ?? "";
     const page = parsePositiveInteger(searchParams.get("page"), DEFAULT_PAGE);
     const limit = parsePositiveInteger(searchParams.get("limit"), DEFAULT_LIMIT, MAX_LIMIT);
     const platforms = normalizePlatforms(searchParams);
@@ -260,6 +280,10 @@ export async function GET(request: Request): Promise<NextResponse> {
         trendingQuery = trendingQuery.contains("tags", [tag]);
       }
 
+      if (forkedFrom) {
+        trendingQuery = trendingQuery.or(`forked_from_id.eq.${forkedFrom},forked_from.eq.${forkedFrom}`);
+      }
+
       if (platforms.length > 0) {
         trendingQuery = trendingQuery.contains("platforms", platforms);
       }
@@ -270,21 +294,55 @@ export async function GET(request: Request): Promise<NextResponse> {
         throw new Error(`加载 Recipe 列表失败: ${error.message}`);
       }
 
+      const candidateRecipes = (data ?? []) as Recipe[];
+      const aggregateMap = await buildExecutionAggregateMap(candidateRecipes.map((recipe) => recipe.id));
+
       // 排序：featured 置顶，然后是 trending score
-      const sortedRecipes = ((data ?? []) as Recipe[]).sort((left, right) => {
+      const sortedRecipes = candidateRecipes.sort((left, right) => {
         const featuredDiff = Number(right.is_featured ?? 0) - Number(left.is_featured ?? 0);
         if (featuredDiff !== 0) return featuredDiff;
+
+        const leftAggregate = aggregateMap.get(left.id);
+        const rightAggregate = aggregateMap.get(right.id);
+        const leftScore = calculateRecipeScore({
+          starCount: left.star_count ?? 0,
+          forkCount: left.fork_count ?? 0,
+          executionCount: left.execution_count ?? left.exec_count ?? 0,
+          successRate: Number(left.success_rate ?? 0),
+          outputCount: leftAggregate?.outputCount ?? 0,
+          recentExecutionCount: leftAggregate?.recentExecutionCount ?? 0,
+        });
+        const rightScore = calculateRecipeScore({
+          starCount: right.star_count ?? 0,
+          forkCount: right.fork_count ?? 0,
+          executionCount: right.execution_count ?? right.exec_count ?? 0,
+          successRate: Number(right.success_rate ?? 0),
+          outputCount: rightAggregate?.outputCount ?? 0,
+          recentExecutionCount: rightAggregate?.recentExecutionCount ?? 0,
+        });
+
+        if (rightScore !== leftScore) {
+          return rightScore - leftScore;
+        }
+
+        const outputDiff = (rightAggregate?.outputCount ?? 0) - (leftAggregate?.outputCount ?? 0);
+        if (outputDiff !== 0) {
+          return outputDiff;
+        }
+
         return calculateRecipeTrendingScore(right) - calculateRecipeTrendingScore(left);
       });
 
       total = sortedRecipes.length;
-      pagedRecipes = sortedRecipes.slice(start, start + limit);
+      pagedRecipes = sortedRecipes
+        .slice(start, start + limit)
+        .map((recipe) => enrichRecipe(recipe, aggregateMap.get(recipe.id)));
     } else {
       const sortColumns: Record<Exclude<RecipeSort, "trending">, { column: keyof Recipe; ascending: boolean }> = {
         newest: { column: "created_at", ascending: false },
         most_starred: { column: "star_count", ascending: false },
         most_forked: { column: "fork_count", ascending: false },
-        most_executed: { column: "exec_count", ascending: false },
+        most_executed: { column: "execution_count", ascending: false },
       };
       const sortColumn = sortColumns[sort];
 
@@ -310,6 +368,10 @@ export async function GET(request: Request): Promise<NextResponse> {
         query = query.contains("tags", [tag]);
       }
 
+      if (forkedFrom) {
+        query = query.or(`forked_from_id.eq.${forkedFrom},forked_from.eq.${forkedFrom}`);
+      }
+
       if (platforms.length > 0) {
         query = query.contains("platforms", platforms);
       }
@@ -325,6 +387,11 @@ export async function GET(request: Request): Promise<NextResponse> {
 
       pagedRecipes = (data ?? []) as Recipe[];
       total = count ?? pagedRecipes.length;
+    }
+
+    if (sort !== "trending") {
+      const aggregateMap = await buildExecutionAggregateMap(pagedRecipes.map((recipe) => recipe.id));
+      pagedRecipes = pagedRecipes.map((recipe) => enrichRecipe(recipe, aggregateMap.get(recipe.id)));
     }
 
     const authorMap = await buildAuthorMap(pagedRecipes);
@@ -439,6 +506,14 @@ export async function POST(request: Request): Promise<NextResponse> {
     if (error) {
       throw new Error(`创建 Recipe 失败: ${error.message}`);
     }
+
+    after(async () => {
+      try {
+        await awardPoints(userId, 10, "recipe_created", data.id);
+      } catch (awardError) {
+        console.error("POST /api/recipes awardPoints failed:", awardError);
+      }
+    });
 
     return successResponse({ recipe: data as Recipe }, 201);
   } catch (error: unknown) {

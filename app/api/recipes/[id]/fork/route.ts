@@ -1,6 +1,8 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 
 import { verifyCsrfOrigin } from "@/lib/csrf";
+import { awardPoints } from "@/lib/reputation";
+import { recalculateRecipeStats } from "@/lib/recipe-stats";
 import { createClientForServer, getSupabaseAdminClient } from "@/lib/supabase/server";
 import type { Recipe } from "@/types/recipe";
 
@@ -119,6 +121,11 @@ export async function POST(request: Request, context: RouteContext): Promise<Nex
       return errorResponse("Recipe 不存在", "RECIPE_NOT_FOUND", 404);
     }
 
+    const sourceForkDepth = Math.max(0, sourceRecipe.fork_depth ?? 0);
+    if (sourceForkDepth >= 10) {
+      return errorResponse("Fork 深度已达上限，不能继续 Fork", "FORK_DEPTH_LIMIT", 400);
+    }
+
     const forkTitle = `${sourceRecipe.title} (Fork)`;
     const forkSlug = await buildUniqueSlug(forkTitle);
     const admin = getSupabaseAdminClient();
@@ -149,6 +156,8 @@ export async function POST(request: Request, context: RouteContext): Promise<Nex
         matrix_config: sourceRecipe.matrix_config,
         tools_required: sourceRecipe.tools_required,
         forked_from: sourceRecipe.id,
+        forked_from_id: sourceRecipe.id,
+        fork_depth: sourceForkDepth + 1,
         status: "draft",
         visibility: "private",
         category: sourceRecipe.category,
@@ -160,15 +169,31 @@ export async function POST(request: Request, context: RouteContext): Promise<Nex
       throw new Error(`创建 Fork 失败: ${forkError.message}`);
     }
 
-    const { error: relationError } = await admin.from("recipe_forks").insert({
-      original_recipe_id: sourceRecipe.id,
-      forked_recipe_id: forkedRecipe.id,
-      user_id: user.id,
-    });
+    const { data: relationData, error: relationError } = await admin
+      .from("recipe_forks")
+      .insert({
+        original_recipe_id: sourceRecipe.id,
+        forked_recipe_id: forkedRecipe.id,
+        user_id: user.id,
+        forked_by: user.id,
+      })
+      .select("id")
+      .single();
 
     if (relationError) {
       throw new Error(`写入 Fork 关系失败: ${relationError.message}`);
     }
+
+    after(async () => {
+      try {
+        await recalculateRecipeStats(sourceRecipe.id);
+        if (sourceRecipe.author_id !== user.id) {
+          await awardPoints(sourceRecipe.author_id, 5, "recipe_got_fork", relationData.id);
+        }
+      } catch (postError) {
+        console.error("POST /api/recipes/[id]/fork post-update failed:", postError);
+      }
+    });
 
     return successResponse({ recipe: forkedRecipe as Recipe }, 201);
   } catch (error: unknown) {

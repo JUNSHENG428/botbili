@@ -7,6 +7,7 @@ import { GlassCard } from "@/components/design/glass-card";
 import { GlassTabs } from "@/components/design/glass-tabs";
 import { RecipeCard, RecipeCardSkeleton } from "@/components/recipes";
 import { Button } from "@/components/ui/button";
+import { levelColors, levelEmoji, levelLabel, type ReputationLevel } from "@/lib/reputation-levels";
 import { createClient } from "@/lib/supabase/client";
 import type { Recipe } from "@/types/recipe";
 
@@ -31,6 +32,11 @@ interface RecipeCardAuthor {
 
 interface RecipeListItem extends Recipe {
   author: RecipeCardAuthor;
+}
+
+interface UserReputationRow {
+  total_points: number;
+  level: ReputationLevel;
 }
 
 type TabValue = "recipes" | "videos";
@@ -128,6 +134,10 @@ export default function UserProfilePage({ params }: UserProfilePageProps) {
     forkCount: 0,
     execCount: 0,
     videoCount: 0,
+  });
+  const [reputation, setReputation] = useState<UserReputationRow>({
+    total_points: 0,
+    level: "newcomer",
   });
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
@@ -234,16 +244,17 @@ export default function UserProfilePage({ params }: UserProfilePageProps) {
             setAuthor(null);
             setRecipes([]);
             setVideos([]);
-            setTotals({
-              recipeCount: 0,
-              starCount: 0,
-              forkCount: 0,
-              execCount: 0,
-              videoCount: 0,
-            });
-            setNotFound(true);
-          }
-          return;
+          setTotals({
+            recipeCount: 0,
+            starCount: 0,
+            forkCount: 0,
+            execCount: 0,
+            videoCount: 0,
+          });
+          setReputation({ total_points: 0, level: "newcomer" });
+          setNotFound(true);
+        }
+        return;
         }
 
         // Fetch recipes
@@ -255,7 +266,11 @@ export default function UserProfilePage({ params }: UserProfilePageProps) {
           .eq("status", "published")
           .eq("visibility", "public");
 
-        const [{ data: summaryRows, count, error: summaryError }, { data: recipeRows, error: recipeError }] =
+        const [
+          { data: summaryRows, count, error: summaryError },
+          { data: recipeRows, error: recipeError },
+          { data: reputationRow },
+        ] =
           await Promise.all([
             baseRecipeQuery,
             supabase
@@ -267,6 +282,11 @@ export default function UserProfilePage({ params }: UserProfilePageProps) {
               .eq("visibility", "public")
               .order("created_at", { ascending: false })
               .limit(12),
+            supabase
+              .from("user_reputation")
+              .select("total_points, level")
+              .eq("user_id", authorId)
+              .maybeSingle<UserReputationRow>(),
           ]);
 
         if (summaryError) {
@@ -313,6 +333,12 @@ export default function UserProfilePage({ params }: UserProfilePageProps) {
         setAuthor(resolvedAuthor);
         setRecipes(nextRecipes);
         setVideos(videoRows);
+        setReputation(
+          reputationRow ?? {
+            total_points: 0,
+            level: "newcomer",
+          },
+        );
         setTotals({
           recipeCount: count ?? summaryRecipes.length,
           starCount: summaryRecipes.reduce((sum, recipe) => sum + (recipe.star_count ?? 0), 0),
@@ -333,6 +359,7 @@ export default function UserProfilePage({ params }: UserProfilePageProps) {
             execCount: 0,
             videoCount: 0,
           });
+          setReputation({ total_points: 0, level: "newcomer" });
           setNotFound(true);
         }
       } finally {
@@ -404,6 +431,10 @@ export default function UserProfilePage({ params }: UserProfilePageProps) {
                     <span className="rounded-full border border-zinc-800 bg-zinc-900 px-2.5 py-1 text-xs text-zinc-300">
                       {identityEmoji} {author.authorType === "ai_agent" ? "AI Agent" : "Human"}
                     </span>
+                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${levelColors[reputation.level]}`}>
+                      {levelEmoji[reputation.level]} {levelLabel[reputation.level]}
+                    </span>
+                    <span className="text-sm text-zinc-400">{reputation.total_points} pts</span>
                   </div>
                   <p className="text-sm text-zinc-400">@{author.username}</p>
                 </div>

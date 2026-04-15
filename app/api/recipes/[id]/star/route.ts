@@ -1,6 +1,7 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 
 import { verifyCsrfOrigin } from "@/lib/csrf";
+import { awardPoints } from "@/lib/reputation";
 import { createClientForServer, getSupabaseAdminClient } from "@/lib/supabase/server";
 
 interface RouteContext {
@@ -24,12 +25,17 @@ function errorResponse(message: string, code: string, status: number): NextRespo
   );
 }
 
-async function resolveRecipeId(identifier: string): Promise<string | null> {
+interface ResolvedRecipe {
+  id: string;
+  author_id: string;
+}
+
+async function resolveRecipe(identifier: string): Promise<ResolvedRecipe | null> {
   const admin = getSupabaseAdminClient();
 
   const { data: byId, error: byIdError } = await admin
     .from("recipes")
-    .select("id, status, visibility")
+    .select("id, author_id, status, visibility")
     .eq("id", identifier)
     .maybeSingle();
 
@@ -41,12 +47,12 @@ async function resolveRecipeId(identifier: string): Promise<string | null> {
     if (byId.status !== "published" || byId.visibility === "private") {
       return null;
     }
-    return byId.id as string;
+    return byId as ResolvedRecipe;
   }
 
   const { data: bySlug, error: bySlugError } = await admin
     .from("recipes")
-    .select("id, status, visibility")
+    .select("id, author_id, status, visibility")
     .eq("slug", identifier)
     .maybeSingle();
 
@@ -62,7 +68,7 @@ async function resolveRecipeId(identifier: string): Promise<string | null> {
     return null;
   }
 
-  return bySlug.id as string;
+  return bySlug as ResolvedRecipe;
 }
 
 /**
@@ -90,8 +96,8 @@ export async function POST(request: Request, context: RouteContext): Promise<Nex
       return errorResponse("请先登录", "UNAUTHORIZED", 401);
     }
 
-    const recipeId = await resolveRecipeId(id);
-    if (!recipeId) {
+    const resolvedRecipe = await resolveRecipe(id);
+    if (!resolvedRecipe) {
       return errorResponse("Recipe 不存在", "RECIPE_NOT_FOUND", 404);
     }
 
@@ -99,7 +105,7 @@ export async function POST(request: Request, context: RouteContext): Promise<Nex
     const { data: existing, error: existingError } = await admin
       .from("recipe_stars")
       .select("id")
-      .eq("recipe_id", recipeId)
+      .eq("recipe_id", resolvedRecipe.id)
       .eq("user_id", user.id)
       .maybeSingle();
 
@@ -115,17 +121,27 @@ export async function POST(request: Request, context: RouteContext): Promise<Nex
         throw new Error(`取消 Star 失败: ${error.message}`);
       }
     } else {
-      const { error } = await admin.from("recipe_stars").insert({ recipe_id: recipeId, user_id: user.id });
+      const { error } = await admin.from("recipe_stars").insert({ recipe_id: resolvedRecipe.id, user_id: user.id });
       if (error) {
         throw new Error(`添加 Star 失败: ${error.message}`);
       }
       starred = true;
+
+      after(async () => {
+        try {
+          if (resolvedRecipe.author_id !== user.id) {
+            await awardPoints(resolvedRecipe.author_id, 3, "recipe_got_star", resolvedRecipe.id);
+          }
+        } catch (awardError) {
+          console.error("POST /api/recipes/[id]/star awardPoints failed:", awardError);
+        }
+      });
     }
 
-    const { data: recipe, error: recipeError } = await admin
+    const { data: recipeCountRow, error: recipeError } = await admin
       .from("recipes")
       .select("star_count")
-      .eq("id", recipeId)
+      .eq("id", resolvedRecipe.id)
       .single();
 
     if (recipeError) {
@@ -134,7 +150,7 @@ export async function POST(request: Request, context: RouteContext): Promise<Nex
 
     return successResponse({
       starred,
-      star_count: recipe.star_count ?? 0,
+      star_count: recipeCountRow.star_count ?? 0,
     });
   } catch (error: unknown) {
     console.error("POST /api/recipes/[id]/star failed:", error);

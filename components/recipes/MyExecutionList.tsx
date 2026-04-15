@@ -42,7 +42,9 @@ const STATUS_CLASS_NAMES: Record<RecipeExecutionStatus, string> = {
   edit_done: "border-violet-500/30 bg-violet-500/10 text-violet-300",
   publishing: "border-amber-500/30 bg-amber-500/10 text-amber-300",
   success: "border-emerald-500/30 bg-emerald-500/10 text-emerald-300",
+  completed: "border-emerald-500/30 bg-emerald-500/10 text-emerald-300",
   failed: "border-red-500/30 bg-red-500/10 text-red-300",
+  cancelled: "border-zinc-700 bg-zinc-800/80 text-zinc-300",
 };
 
 const STATUS_LABELS: Record<RecipeExecutionStatus, string> = {
@@ -52,7 +54,9 @@ const STATUS_LABELS: Record<RecipeExecutionStatus, string> = {
   edit_done: "剪辑完成",
   publishing: "发布中",
   success: "已完成",
+  completed: "已完成",
   failed: "失败",
+  cancelled: "已取消",
 };
 
 function getExecutionProgress(execution: ExecutionRow): number {
@@ -72,8 +76,10 @@ function getExecutionProgress(execution: ExecutionRow): number {
     case "publishing":
       return 85;
     case "success":
+    case "completed":
       return 100;
     case "failed":
+    case "cancelled":
       return 100;
     default:
       return 0;
@@ -194,7 +200,15 @@ export function MyExecutionList({ userId }: MyExecutionListProps) {
   }, [userId]);
 
   const hasRunningExecution = useMemo(
-    () => executions.some((execution) => execution.status === "pending" || execution.status === "running"),
+    () =>
+      executions.some(
+        (execution) =>
+          execution.status === "pending" ||
+          execution.status === "running" ||
+          execution.status === "script_done" ||
+          execution.status === "edit_done" ||
+          execution.status === "publishing",
+      ),
     [executions],
   );
 

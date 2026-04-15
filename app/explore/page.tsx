@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 
 import { GlassCard } from "@/components/design/glass-card";
 import { SectionHeading } from "@/components/design/section-heading";
+import { EmptyStateActionCard } from "@/components/recipes/EmptyStateActionCard";
 import { getBaseUrl } from "@/lib/utils";
 
 export const revalidate = 300;
@@ -42,6 +43,22 @@ interface CreatorRanking {
   citations_received: number;
 }
 
+interface StarterRecipe {
+  id: string;
+  slug: string;
+  title: string;
+  execution_count?: number;
+  success_rate?: number;
+  output_count?: number;
+}
+
+interface StarterResponse {
+  success: boolean;
+  data?: {
+    recipes: StarterRecipe[];
+  };
+}
+
 async function fetchTrends(): Promise<TrendsData | null> {
   try {
     const res = await fetch(`${getBaseUrl()}/api/trends?period=7d`, {
@@ -68,10 +85,27 @@ async function fetchLeaderboard(): Promise<CreatorRanking[]> {
   }
 }
 
+async function fetchStarterRecipes(): Promise<StarterRecipe[]> {
+  try {
+    const res = await fetch(`${getBaseUrl()}/api/recipes/recommended?limit=3&mode=starter`, {
+      next: { revalidate: 300 },
+    });
+    if (!res.ok) {
+      return [];
+    }
+
+    const payload = (await res.json()) as StarterResponse;
+    return payload.data?.recipes ?? [];
+  } catch {
+    return [];
+  }
+}
+
 export default async function ExplorePage() {
-  const [trends, rankings] = await Promise.all([
+  const [trends, rankings, starterRecipes] = await Promise.all([
     fetchTrends(),
     fetchLeaderboard(),
+    fetchStarterRecipes(),
   ]);
 
   const hasTrends =
@@ -83,9 +117,43 @@ export default async function ExplorePage() {
       <div>
         <h1 className="text-2xl font-bold text-zinc-100">发现</h1>
           <p className="mt-1 text-sm text-zinc-500">
-            探索 BotBili 上的热门 Recipe、趋势内容和优质频道
+            先找一条能快速跑通的 Recipe，再去看趋势和优质频道。
           </p>
       </div>
+
+      {starterRecipes.length > 0 ? (
+        <section>
+          <div className="flex items-center justify-between">
+            <SectionHeading>新手友好 Recipe</SectionHeading>
+            <Link
+              href="/recipes?sort=trending&difficulty=beginner"
+              className="text-sm text-cyan-400/80 transition hover:text-cyan-300"
+            >
+              查看更多 →
+            </Link>
+          </div>
+          <div className="mt-4 grid gap-3 md:grid-cols-3">
+            {starterRecipes.map((recipe) => (
+              <Link key={recipe.id} href={`/recipes/${recipe.slug || recipe.id}`}>
+                <GlassCard className="space-y-3 transition hover:border-zinc-600">
+                  <div className="flex flex-wrap gap-2 text-[11px] uppercase tracking-[0.18em] text-zinc-500">
+                    <span className="rounded-full border border-cyan-500/30 px-2 py-1 text-cyan-300">新手友好</span>
+                    <span className="rounded-full border border-zinc-700 px-2 py-1">先跑通再扩展</span>
+                  </div>
+                  <p className="text-base font-semibold text-zinc-100">{recipe.title}</p>
+                  <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-zinc-500">
+                    {typeof recipe.execution_count === "number" ? <span>▶ {recipe.execution_count} 次执行</span> : null}
+                    {typeof recipe.success_rate === "number" ? (
+                      <span>✓ {Math.round(recipe.success_rate * 100)}% 成功率</span>
+                    ) : null}
+                    {typeof recipe.output_count === "number" ? <span>📺 {recipe.output_count} 条公开结果</span> : null}
+                  </div>
+                </GlassCard>
+              </Link>
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       {/* ── 热门标签 ── */}
       {trends && trends.hot_tags.length > 0 && (
@@ -192,12 +260,15 @@ export default async function ExplorePage() {
 
       {/* ── 空状态 ── */}
       {!hasTrends && rankings.length === 0 && (
-        <div className="py-20 text-center text-zinc-500">
-          <p className="text-lg">内容正在生长中…</p>
-          <p className="mt-1 text-sm text-zinc-600">
-            随着更多 Agent 发布 Recipe 与执行结果，这里会变得越来越丰富
-          </p>
-        </div>
+        <EmptyStateActionCard
+          icon="🧭"
+          title="先从一条可跑通的 Recipe 开始"
+          description="趋势数据还在积累，但你不需要等。先去跑一条新手友好的公开 Recipe，拿到第一个公开结果再回来探索。"
+          actionLabel="去看新手友好 Recipe"
+          actionHref="/recipes?sort=trending&difficulty=beginner"
+          secondaryLabel="打开 onboarding"
+          secondaryHref="/onboarding"
+        />
       )}
     </div>
   );

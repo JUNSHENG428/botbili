@@ -8,15 +8,30 @@ import type {
 } from '@/types/recipe';
 
 export function calculateRecipeTrendingScore(
-  recipe: Pick<Recipe, 'star_count' | 'fork_count' | 'exec_count' | 'created_at'>,
+  recipe: Pick<
+    Recipe,
+    | 'star_count'
+    | 'fork_count'
+    | 'exec_count'
+    | 'execution_count'
+    | 'effect_score'
+    | 'last_executed_at'
+    | 'created_at'
+  >,
 ): number {
-  const baseScore = recipe.star_count * 0.45 + recipe.fork_count * 0.3 + recipe.exec_count * 0.25;
+  const executionCount = recipe.execution_count ?? recipe.exec_count ?? 0;
+  const effectScore = recipe.effect_score ?? 0;
+  const baseScore =
+    effectScore > 0
+      ? effectScore + recipe.star_count * 0.2 + recipe.fork_count * 0.3
+      : recipe.star_count * 0.45 + recipe.fork_count * 0.3 + executionCount * 0.25;
 
   if (baseScore <= 0) {
     return 0;
   }
 
-  const createdAtMs = new Date(recipe.created_at).getTime();
+  const freshnessSource = recipe.last_executed_at ?? recipe.created_at;
+  const createdAtMs = new Date(freshnessSource).getTime();
   const ageInDays = Number.isFinite(createdAtMs)
     ? Math.max(0, (Date.now() - createdAtMs) / (1000 * 60 * 60 * 24))
     : 30;
@@ -100,7 +115,7 @@ export async function listRecipes(
     newest: { column: 'created_at', ascending: false },
     most_starred: { column: 'star_count', ascending: false },
     most_forked: { column: 'fork_count', ascending: false },
-    most_executed: { column: 'exec_count', ascending: false },
+    most_executed: { column: 'execution_count', ascending: false },
   };
   const { column: orderCol, ascending: orderAsc } =
     sortMap[sort] ?? sortMap['newest'];

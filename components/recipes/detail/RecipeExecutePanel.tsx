@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import type { ReactNode } from "react";
 
@@ -12,27 +12,25 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
 import { formatRelativeTime } from "@/lib/format";
+import {
+  getExecutionFailureSuggestions,
+  getExecutionOutputDisplayStatus,
+  getExecutionStatusClassName,
+  getExecutionStatusLabel,
+  isExecutionCompletedStatus,
+  isExecutionFailedStatus,
+  isExecutionTerminalStatus,
+} from "@/lib/executions/getExecutionStatusLabel";
+import { normalizeExecutionOutput } from "@/lib/executions/normalizeExecutionOutput";
 import { getRecipePlatforms } from "@/lib/recipe-utils";
 import type {
   Recipe,
-  RecipeExecutionOutput as RecipeExecutionOutputData,
-  RecipeExecutionStatus,
-  VideoPlatform,
+  RecipeExecutionStatusSnapshot,
 } from "@/types/recipe";
 
 interface PendingExecutionState {
   executionId: string;
   commandPreview: string;
-}
-
-interface ExecutionStatusPayload {
-  status: RecipeExecutionStatus;
-  progress_pct: number;
-  output: RecipeExecutionOutputData | null;
-  output_external_url: string | null;
-  output_thumbnail_url: string | null;
-  output_platform: string | null;
-  error_message: string | null;
 }
 
 interface RecipeExecutePanelProps {
@@ -47,66 +45,6 @@ interface RecipeExecutePanelProps {
   onStar: () => Promise<void>;
   onFork: () => Promise<void>;
   onSave: () => Promise<void>;
-}
-
-function getExecutionStatusLabel(status: RecipeExecutionStatus): string {
-  const labels: Record<RecipeExecutionStatus, string> = {
-    pending: "等待中",
-    running: "执行中",
-    script_done: "脚本完成",
-    edit_done: "剪辑完成",
-    publishing: "发布中",
-    success: "已完成",
-    failed: "失败",
-  };
-
-  return labels[status];
-}
-
-function getExecutionStatusClassName(status: RecipeExecutionStatus): string {
-  if (status === "success") {
-    return "border-emerald-500/30 bg-emerald-500/10 text-emerald-300";
-  }
-
-  if (status === "failed") {
-    return "border-red-500/30 bg-red-500/10 text-red-300";
-  }
-
-  if (status === "pending") {
-    return "border-zinc-700 bg-zinc-800/80 text-zinc-300";
-  }
-
-  return "border-cyan-500/30 bg-cyan-500/10 text-cyan-300";
-}
-
-function getOutputStatus(status: RecipeExecutionStatus): "pending" | "running" | "completed" | "failed" {
-  if (status === "success") {
-    return "completed";
-  }
-  if (status === "failed") {
-    return "failed";
-  }
-  if (status === "pending") {
-    return "pending";
-  }
-  return "running";
-}
-
-function normalizeExecutionOutput(payload: ExecutionStatusPayload): RecipeExecutionOutputData | null {
-  if (payload.output) {
-    return payload.output;
-  }
-
-  if (!payload.output_external_url || !payload.output_platform) {
-    return null;
-  }
-
-  return {
-    platform: payload.output_platform as VideoPlatform,
-    video_url: payload.output_external_url,
-    title: "执行产出",
-    thumbnail_url: payload.output_thumbnail_url ?? undefined,
-  };
 }
 
 // 计算退避轮询间隔（毫秒）
@@ -129,7 +67,7 @@ function ExecutionStatusBadge({
   recipe: Recipe;
   onRetry?: () => void;
 }) {
-  const [statusState, setStatusState] = useState<ExecutionStatusPayload | null>(null);
+  const [statusState, setStatusState] = useState<RecipeExecutionStatusSnapshot | null>(null);
   const [startTime] = useState(Date.now());
 
   useEffect(() => {
@@ -141,7 +79,7 @@ function ExecutionStatusBadge({
         const response = await fetch(`/api/executions/${executionId}`);
         const payload = (await response.json()) as {
           success?: boolean;
-          data?: ExecutionStatusPayload;
+          data?: RecipeExecutionStatusSnapshot;
         };
 
         if (!active || !response.ok || !payload.success || !payload.data) {
@@ -151,7 +89,9 @@ function ExecutionStatusBadge({
         setStatusState(payload.data);
 
         // 如果已完成或失败，停止轮询
-        if (payload.data.status === "success" || payload.data.status === "failed") {
+        if (
+          isExecutionTerminalStatus(payload.data.status)
+        ) {
           return;
         }
 
@@ -197,11 +137,12 @@ function ExecutionStatusBadge({
     );
   }
 
-  const isRunning = statusState.status !== "pending" && statusState.status !== "success" && statusState.status !== "failed";
-  const isCompleted = statusState.status === "success";
-  const isFailed = statusState.status === "failed";
-  const output = normalizeExecutionOutput(statusState);
+  const isRunning = statusState.status !== "pending" && !isExecutionTerminalStatus(statusState.status);
+  const isCompleted = isExecutionCompletedStatus(statusState.status);
+  const isFailed = isExecutionFailedStatus(statusState.status);
+  const output = normalizeExecutionOutput(statusState, recipe.title);
   const progress = statusState.progress_pct ?? 0;
+  const failureSuggestions = isFailed ? getExecutionFailureSuggestions(statusState.error_message) : [];
 
   return (
     <div className="space-y-3">
@@ -219,6 +160,12 @@ function ExecutionStatusBadge({
         </Link>
       </div>
 
+      {statusState.status === "pending" ? (
+        <p className="text-xs leading-6 text-zinc-500">
+          当前只创建了 execution 记录，BotBili 不会主动连到你的本地 Agent。OpenClaw 会通过轮询接口主动领取任务。
+        </p>
+      ) : null}
+
       {/* 进度条（running 状态） */}
       {isRunning && (
         <div className="space-y-1">
@@ -235,34 +182,17 @@ function ExecutionStatusBadge({
         </div>
       )}
 
-      {/* 成功状态：视频预览卡片 */}
-      {isCompleted && statusState.output_external_url && (
+      {/* 成功状态：外链结果卡片 */}
+      {isCompleted && output ? (
         <>
-          <div className="mt-4 rounded-xl overflow-hidden border border-white/10">
-            <video
-              src={statusState.output_external_url}
-              controls
-              className="w-full max-h-64 object-contain bg-black"
-            />
-            <div className="p-3 flex items-center justify-between bg-white/5">
-              <span className="text-sm text-white/80">执行完成</span>
-              <a
-                href={statusState.output_external_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-sm text-teal-400 hover:text-teal-300 underline"
-              >
-                在新标签页打开
-              </a>
-            </div>
-          </div>
+          <RecipeExecutionOutput output={output} status="completed" />
           <ExecutionShareCard
             recipeTitle={recipe.title}
             recipeSlug={recipe.slug || recipe.id}
-            videoUrl={statusState.output_external_url}
+            videoUrl={output.video_url}
           />
         </>
-      )}
+      ) : null}
 
       {/* 成功但未回填链接 */}
       {isCompleted && !statusState.output_external_url && (
@@ -273,18 +203,24 @@ function ExecutionStatusBadge({
 
       {/* 失败状态：错误信息 + 重试按钮 */}
       {isFailed && (
-        <div className="mt-4 space-y-2">
-          {statusState.error_message && (
-            <p className="text-sm text-red-400 bg-red-400/10 rounded-lg px-3 py-2">
-              {statusState.error_message}
+        <div className="mt-4 space-y-3">
+          <div className="rounded-xl border border-red-500/20 bg-red-500/10 p-4">
+            <p className="text-sm font-medium text-red-300">
+              {statusState.error_message ?? "执行失败，Agent 没有成功完成这次回写。"}
             </p>
-          )}
+            <div className="mt-3 space-y-1 text-xs leading-6 text-red-100/80">
+              {failureSuggestions.map((suggestion) => (
+                <p key={suggestion}>• {suggestion}</p>
+              ))}
+            </div>
+          </div>
           {onRetry && (
             <button
+              type="button"
               onClick={onRetry}
               className="w-full py-2 rounded-lg border border-white/20 text-sm text-white/80 hover:bg-white/10 transition-colors"
             >
-              重试
+              重新执行
             </button>
           )}
         </div>
@@ -292,7 +228,7 @@ function ExecutionStatusBadge({
 
       {/* 输出卡片（如果有） */}
       {output && !isCompleted && (
-        <RecipeExecutionOutput output={output} status={getOutputStatus(statusState.status)} />
+        <RecipeExecutionOutput output={output} status={getExecutionOutputDisplayStatus(statusState.status)} />
       )}
     </div>
   );

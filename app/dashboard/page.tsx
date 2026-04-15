@@ -6,8 +6,11 @@ import Link from "next/link";
 import { AuroraButton } from "@/components/design/aurora-button";
 import { GhostButton } from "@/components/design/ghost-button";
 import { GlassCard } from "@/components/design/glass-card";
+import { FirstRecipeGuide } from "@/components/onboarding/FirstRecipeGuide";
+import { EmptyStateActionCard } from "@/components/recipes/EmptyStateActionCard";
 import { MyExecutionList } from "@/components/recipes/MyExecutionList";
 import { MyRecipeList } from "@/components/recipes/MyRecipeList";
+import { getExecutionStatusLabel } from "@/lib/executions/getExecutionStatusLabel";
 import { createClient } from "@/lib/supabase/client";
 
 interface RecipeStatRow {
@@ -112,6 +115,50 @@ function QuickActions() {
         <GhostButton href="/setup-agent">去设置</GhostButton>
       </GlassCard>
     </div>
+  );
+}
+
+function ExecutionStatusGuide() {
+  const guideStatuses = [
+    {
+      key: "pending",
+      label: getExecutionStatusLabel("pending"),
+      hint: "execution 已创建，等待本地 OpenClaw 主动轮询领取任务。",
+    },
+    {
+      key: "running",
+      label: getExecutionStatusLabel("running"),
+      hint: "Agent 已经开始跑流程，Dashboard 会自动刷新最新进度。",
+    },
+    {
+      key: "completed",
+      label: getExecutionStatusLabel("completed"),
+      hint: "执行已完成，优先回看平台、封面和外链结果是否正确。",
+    },
+    {
+      key: "failed",
+      label: getExecutionStatusLabel("failed"),
+      hint: "先看错误信息，再检查 Agent 在线状态、回调密钥和平台授权。",
+    },
+  ] as const;
+
+  return (
+    <GlassCard className="space-y-4">
+      <div className="space-y-1">
+        <h2 className="text-lg font-semibold text-zinc-100">执行状态说明</h2>
+        <p className="text-sm text-zinc-500">
+          Dashboard 里的 execution 使用统一状态模型，历史 `success` 会按“已完成”语义展示。
+        </p>
+      </div>
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        {guideStatuses.map((item) => (
+          <div key={item.key} className="rounded-2xl border border-zinc-800/80 bg-zinc-950/60 p-4">
+            <p className="text-sm font-medium text-zinc-100">{item.label}</p>
+            <p className="mt-2 text-xs leading-6 text-zinc-500">{item.hint}</p>
+          </div>
+        ))}
+      </div>
+    </GlassCard>
   );
 }
 
@@ -292,6 +339,42 @@ export default function DashboardPage() {
       </section>
 
       <QuickActions />
+      <ExecutionStatusGuide />
+
+      {stats.totalRecipes === 0 && stats.totalExecsReceived === 0 ? (
+        <section className="space-y-4">
+          <div className="grid gap-4 lg:grid-cols-2">
+            <EmptyStateActionCard
+              icon="🚀"
+              title="先跑通第一条公开 Recipe"
+              description="如果你还没有任何 Recipe 和执行记录，先去挑一条新手友好的公开 Recipe，把 Agent 链路跑通。"
+              actionLabel="去看新手友好 Recipe"
+              actionHref="/recipes?sort=trending&difficulty=beginner"
+              secondaryLabel="打开 onboarding"
+              secondaryHref="/onboarding"
+            />
+            <EmptyStateActionCard
+              icon="🦞"
+              title="把 Agent 接上 BotBili"
+              description="你的本地 Agent 接通后，才会开始领取 execution、执行 Recipe，并把公开视频结果回填回来。"
+              actionLabel="去连接 Agent"
+              actionHref="/setup-agent"
+              secondaryLabel="先看 onboarding"
+              secondaryHref="/onboarding?step=3"
+            />
+          </div>
+
+          <GlassCard className="space-y-4">
+            <div className="space-y-1">
+              <h2 className="text-lg font-semibold text-zinc-100">直接选一条 starter Recipe</h2>
+              <p className="text-sm leading-7 text-zinc-500">
+                这些推荐优先考虑步骤少、成功率更稳、并且已经有人公开回填结果，适合拿来做第一条样板。
+              </p>
+            </div>
+            <FirstRecipeGuide />
+          </GlassCard>
+        </section>
+      ) : null}
 
       <section className="space-y-6">
         <MyRecipeList userId={userId} />

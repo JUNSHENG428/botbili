@@ -2,11 +2,13 @@
 
 import { useDeferredValue, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
 
 import { AuroraButton } from "@/components/design/aurora-button";
 import { GlassCard } from "@/components/design/glass-card";
 import { SectionHeading } from "@/components/design/section-heading";
 import { RecipeCard, RecipeCardSkeleton } from "@/components/recipes";
+import { EmptyStateActionCard } from "@/components/recipes/EmptyStateActionCard";
 import { RecipeFilters } from "@/components/recipes/RecipeFilters";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
@@ -32,6 +34,10 @@ interface RecipesResponsePayload {
   page: number;
   limit: number;
   hasMore: boolean;
+}
+
+interface RecommendedRecipesPayload {
+  recipes: RecipeListItem[];
 }
 
 interface ApiResponse<T> {
@@ -65,6 +71,7 @@ function buildRecipesUrl(params: {
   difficulty: string;
   platforms: string[];
   tag: string | null;
+  forkedFrom: string | null;
   page: number;
   limit?: number;
 }): string {
@@ -94,6 +101,10 @@ function buildRecipesUrl(params: {
     search.set("tag", params.tag);
   }
 
+  if (params.forkedFrom) {
+    search.set("forked_from", params.forkedFrom);
+  }
+
   return `/api/recipes?${search.toString()}`;
 }
 
@@ -110,6 +121,7 @@ export default function RecipesPage() {
   const currentPlatformsKey = currentPlatforms.join(",");
   const currentQuery = searchParams.get("q") ?? "";
   const currentTag = searchParams.get("tag") ?? null;
+  const currentForkedFrom = searchParams.get("forked_from") ?? null;
 
   const [searchInput, setSearchInput] = useState(currentQuery);
   const deferredSearchInput = useDeferredValue(searchInput);
@@ -128,6 +140,10 @@ export default function RecipesPage() {
   const [userId, setUserId] = useState<string | null>(null);
   const [showGuide, setShowGuide] = useState(false);
   const [popularTags, setPopularTags] = useState<TagItem[]>([]);
+  const [recommendedRecipes, setRecommendedRecipes] = useState<RecipeListItem[]>([]);
+  const [recommendedLoading, setRecommendedLoading] = useState(false);
+  const [starterRecipes, setStarterRecipes] = useState<RecipeListItem[]>([]);
+  const [starterLoading, setStarterLoading] = useState(true);
 
   // 加载热门标签
   useEffect(() => {
@@ -144,6 +160,89 @@ export default function RecipesPage() {
   useEffect(() => {
     setSearchInput(currentQuery);
   }, [currentQuery]);
+
+  useEffect(() => {
+    if (!userId) {
+      setRecommendedRecipes([]);
+      return;
+    }
+
+    let active = true;
+    const controller = new AbortController();
+
+    async function loadRecommendations() {
+      try {
+        setRecommendedLoading(true);
+        const response = await fetch("/api/recipes/recommended?limit=3", {
+          signal: controller.signal,
+        });
+        const payload = (await response.json()) as ApiResponse<RecommendedRecipesPayload>;
+
+        if (!active || !response.ok || !payload.success || !payload.data) {
+          return;
+        }
+
+        setRecommendedRecipes(payload.data.recipes);
+      } catch (error) {
+        if (controller.signal.aborted || !active) {
+          return;
+        }
+
+        console.error("Failed to load recommended recipes:", error);
+        setRecommendedRecipes([]);
+      } finally {
+        if (active) {
+          setRecommendedLoading(false);
+        }
+      }
+    }
+
+    void loadRecommendations();
+
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [userId]);
+
+  useEffect(() => {
+    let active = true;
+    const controller = new AbortController();
+
+    async function loadStarterRecipes() {
+      try {
+        setStarterLoading(true);
+        const response = await fetch("/api/recipes/recommended?limit=3&mode=starter", {
+          signal: controller.signal,
+        });
+        const payload = (await response.json()) as ApiResponse<RecommendedRecipesPayload>;
+
+        if (!active || !response.ok || !payload.success || !payload.data) {
+          return;
+        }
+
+        setStarterRecipes(payload.data.recipes);
+      } catch (error) {
+        if (!active || controller.signal.aborted) {
+          return;
+        }
+
+        console.error("Failed to load starter recipes:", error);
+        setStarterRecipes([]);
+      } finally {
+        if (active) {
+          setStarterLoading(false);
+        }
+      }
+    }
+
+    void loadStarterRecipes();
+
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, []);
 
   useEffect(() => {
     const supabase = createClient();
@@ -207,6 +306,7 @@ export default function RecipesPage() {
             difficulty: currentDifficulty,
             platforms: currentPlatforms,
             tag: currentTag,
+            forkedFrom: currentForkedFrom,
             page: 1,
           }),
           {
@@ -246,7 +346,7 @@ export default function RecipesPage() {
     void loadFirstPage();
 
     return () => controller.abort();
-  }, [currentCategory, currentDifficulty, currentPlatformsKey, currentQuery, currentSort, currentTag]);
+  }, [currentCategory, currentDifficulty, currentForkedFrom, currentPlatformsKey, currentQuery, currentSort, currentTag]);
 
   useEffect(() => {
     if (loading || loadError) {
@@ -345,9 +445,10 @@ export default function RecipesPage() {
           category: currentCategory,
           difficulty: currentDifficulty,
           platforms: currentPlatforms,
-          tag: currentTag,
-          page: nextPage,
-        }),
+            tag: currentTag,
+            forkedFrom: currentForkedFrom,
+            page: nextPage,
+          }),
       );
 
       const payload = (await response.json()) as ApiResponse<RecipesResponsePayload>;
@@ -376,6 +477,16 @@ export default function RecipesPage() {
       [recipeId]: newState,
     }));
     setRecipes((currentRecipes) =>
+      currentRecipes.map((recipe) =>
+        recipe.id === recipeId
+          ? {
+              ...recipe,
+              star_count: Math.max(0, recipe.star_count + (newState ? 1 : -1)),
+            }
+          : recipe,
+      ),
+    );
+    setRecommendedRecipes((currentRecipes) =>
       currentRecipes.map((recipe) =>
         recipe.id === recipeId
           ? {
@@ -415,6 +526,16 @@ export default function RecipesPage() {
             : recipe,
         ),
       );
+      setRecommendedRecipes((currentRecipes) =>
+        currentRecipes.map((recipe) =>
+          recipe.id === recipeId
+            ? {
+                ...recipe,
+                star_count: payload.data!.star_count,
+              }
+            : recipe,
+        ),
+      );
     } catch (error) {
       const message = error instanceof Error ? error.message : "Star 操作失败";
 
@@ -423,6 +544,16 @@ export default function RecipesPage() {
         [recipeId]: previousStarred,
       }));
       setRecipes((currentRecipes) =>
+        currentRecipes.map((recipe) =>
+          recipe.id === recipeId
+            ? {
+                ...recipe,
+                star_count: Math.max(0, recipe.star_count + (previousStarred ? 1 : -1)),
+              }
+            : recipe,
+        ),
+      );
+      setRecommendedRecipes((currentRecipes) =>
         currentRecipes.map((recipe) =>
           recipe.id === recipeId
             ? {
@@ -453,18 +584,6 @@ export default function RecipesPage() {
     }, 80);
   }
 
-  function handleClearFilters() {
-    const nextParams = new URLSearchParams();
-    if (currentSort && currentSort !== "trending") {
-      nextParams.set("sort", "trending");
-    }
-
-    setSearchInput("");
-    startRouteTransition(() => {
-      router.push(`/recipes${nextParams.toString() ? `?${nextParams.toString()}` : ""}`, { scroll: false });
-    });
-  }
-
   const hasActiveFilters = Boolean(
     currentQuery.trim() || currentCategory || currentDifficulty || currentPlatforms.length > 0 || currentTag,
   );
@@ -481,7 +600,7 @@ export default function RecipesPage() {
         <section className="space-y-5">
           <SectionHeading
             className="text-left"
-            subtitle="解决三个新手痛点：没有灵感时看 Trending Recipe，不会剪辑时一键执行，不知道矩阵规划时直接 Fork 现成方案。"
+            subtitle="复制一个 Recipe，让 Agent 帮你做视频。先跑通一条公开 Recipe，再决定要不要 Fork、改参数和做矩阵。"
           >
             发现 Recipe
           </SectionHeading>
@@ -489,25 +608,118 @@ export default function RecipesPage() {
           <div className="flex flex-col gap-4 rounded-3xl border border-zinc-800/80 bg-gradient-to-br from-zinc-900 via-zinc-950 to-zinc-900 p-6 sm:flex-row sm:items-end sm:justify-between">
             <div className="space-y-3">
               <p className="max-w-2xl text-sm leading-7 text-zinc-400">
-                BotBili 是 GitHub for AI Video Recipes。你可以在这里看大佬怎么拆脚本、怎么做矩阵、怎么把一个视频流程沉淀成可复用的 Repo。
+                不会剪也能开始。先挑一条成功率高、有人公开回填结果的 Recipe，让 OpenClaw 帮你跑出第一条视频。
               </p>
               <div className="flex flex-wrap gap-2 text-xs text-zinc-500">
-                <span>没灵感：看 Trending</span>
-                <span>不会剪辑：一键执行</span>
-                <span>不会做矩阵：Fork 现成方案</span>
+                <span>第一步：挑一条新手友好 Recipe</span>
+                <span>第二步：连接 Agent</span>
+                <span>第三步：执行并回填公开结果</span>
               </div>
             </div>
 
-            <AuroraButton href="/recipes/new" size="lg">
-              创建 Recipe
-            </AuroraButton>
+            <div className="flex flex-wrap gap-3">
+              <AuroraButton href="/onboarding" size="lg">
+                开始第一条成功路径
+              </AuroraButton>
+              <Link
+                href="/recipes/new"
+                className="inline-flex min-h-11 items-center justify-center rounded-lg border border-zinc-700 bg-zinc-950/70 px-4 py-2 text-sm text-zinc-200 transition hover:border-zinc-600 hover:text-zinc-50"
+              >
+                创建 Recipe
+              </Link>
+            </div>
           </div>
         </section>
+
+        <section className="space-y-4">
+          <div className="space-y-1">
+            <h2 className="text-lg font-semibold text-zinc-100">第一条成功路径</h2>
+            <p className="text-sm text-zinc-500">
+              这些 Recipe 更适合第一次执行：步骤少、成功率高、并且已经有人公开回填结果。
+            </p>
+          </div>
+
+          {starterLoading ? (
+            <div className="grid gap-4 md:grid-cols-3">
+              {Array.from({ length: 3 }).map((_, index) => (
+                <div key={index} className="h-40 animate-pulse rounded-2xl border border-zinc-800 bg-zinc-900/60" />
+              ))}
+            </div>
+          ) : starterRecipes.length > 0 ? (
+            <div className="grid gap-4 md:grid-cols-3">
+              {starterRecipes.map((recipe) => (
+                <Link
+                  key={recipe.id}
+                  href={`/recipes/${recipe.slug || recipe.id}`}
+                  className="rounded-2xl border border-zinc-800 bg-zinc-950/70 p-5 transition hover:border-cyan-500/30 hover:bg-zinc-900"
+                >
+                  <div className="flex flex-wrap gap-2 text-[11px] uppercase tracking-[0.18em] text-zinc-500">
+                    <span className="rounded-full border border-cyan-500/30 px-2 py-1 text-cyan-300">新手友好</span>
+                    <span className="rounded-full border border-zinc-700 px-2 py-1">5 分钟跑通</span>
+                  </div>
+                  <p className="mt-4 text-lg font-semibold text-zinc-100">{recipe.title}</p>
+                  <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1 text-xs text-zinc-500">
+                    {typeof recipe.execution_count === "number" ? <span>▶ {recipe.execution_count} 次执行</span> : null}
+                    {typeof recipe.success_rate === "number" ? (
+                      <span>✓ {Math.round(recipe.success_rate * 100)}% 成功率</span>
+                    ) : null}
+                    {typeof recipe.output_count === "number" && recipe.output_count > 0 ? (
+                      <span>📺 已有 {recipe.output_count} 条公开结果</span>
+                    ) : null}
+                  </div>
+                </Link>
+              ))}
+            </div>
+          ) : (
+            <EmptyStateActionCard
+              icon="🚀"
+              title="先跑一条公开 Recipe"
+              description="从社区里已经验证过的 Recipe 开始，比从空白页写脚本更容易拿到第一条成功结果。"
+              actionLabel="去看热门 Recipe"
+              actionHref="/recipes?sort=trending"
+              secondaryLabel="打开 onboarding"
+              secondaryHref="/onboarding"
+            />
+          )}
+        </section>
+
+        {userId && (recommendedLoading || recommendedRecipes.length > 0) ? (
+          <section className="space-y-4">
+            <div className="space-y-1">
+              <h2 className="text-lg font-semibold text-zinc-100">为你推荐</h2>
+              <p className="text-sm text-zinc-500">
+                根据你的执行历史、Star 记录和 Fork 链路，优先推荐更可能跑出结果的 Recipe。
+              </p>
+            </div>
+
+            {recommendedLoading ? (
+              <div className="flex gap-4 overflow-x-auto pb-1">
+                {Array.from({ length: 3 }).map((_, index) => (
+                  <div key={index} className="min-w-[280px] flex-1">
+                    <RecipeCardSkeleton />
+                  </div>
+                ))}
+              </div>
+            ) : recommendedRecipes.length > 0 ? (
+              <div className="flex gap-4 overflow-x-auto pb-1">
+                {recommendedRecipes.map((recipe) => (
+                  <RecipeCard
+                    key={recipe.id}
+                    recipe={recipe}
+                    isStarred={starredMap[recipe.id] ?? false}
+                    onStarToggle={handleStarToggle}
+                    className="min-w-[280px] max-w-[360px] flex-1"
+                  />
+                ))}
+              </div>
+            ) : null}
+          </section>
+        ) : null}
 
         {showGuide ? (
           <GlassCard className="flex flex-col gap-3 border-cyan-500/20 bg-cyan-500/5 py-4 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-sm text-zinc-200">
-              👋 第一次来？先执行一个别人写好的 Recipe，看看 AI 视频是怎么生产的。
+              👋 第一次来？先执行一个新手友好的公开 Recipe，看一遍从执行到公开回填的完整路径。
             </p>
             <Button
               type="button"
@@ -515,7 +727,7 @@ export default function RecipesPage() {
               className="border-cyan-500/30 bg-zinc-950/70 text-cyan-200 hover:border-cyan-400/40 hover:bg-zinc-900"
               onClick={handleGuideBrowseTrending}
             >
-              浏览热门 Recipe ↓
+              先挑第一条 Recipe ↓
             </Button>
           </GlassCard>
         ) : null}
@@ -593,45 +805,25 @@ export default function RecipesPage() {
               ) : null}
             </section>
           ) : hasActiveFilters ? (
-            <GlassCard className="py-16 text-center">
-              <div className="space-y-4">
-                <div className="text-5xl">🔎</div>
-                <div className="space-y-2">
-                  <p className="text-2xl font-semibold text-zinc-100">没找到匹配的 Recipe</p>
-                  <p className="mx-auto max-w-xl text-sm leading-7 text-zinc-500">
-                    换个关键词，或者成为第一个发布这类 Recipe 的人。
-                  </p>
-                </div>
-                <div className="flex flex-col items-center justify-center gap-3 sm:flex-row">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="border-zinc-700 bg-zinc-950/70"
-                    onClick={handleClearFilters}
-                  >
-                    清除筛选
-                  </Button>
-                  <AuroraButton href={createRecipeHref} size="lg">
-                    创建这个 Recipe
-                  </AuroraButton>
-                </div>
-              </div>
-            </GlassCard>
+            <EmptyStateActionCard
+              icon="🔎"
+              title="没找到匹配的 Recipe"
+              description="换个关键词，或者先去看热门 Recipe 找灵感；如果你已经知道要做什么，也可以直接创建这一类 Recipe。"
+              actionLabel="清除筛选，回到热门榜"
+              actionHref="/recipes?sort=trending"
+              secondaryLabel="创建这个 Recipe"
+              secondaryHref={createRecipeHref}
+            />
           ) : (
-            <GlassCard className="py-16 text-center">
-              <div className="space-y-4">
-                <div className="text-5xl">🧪</div>
-                <div className="space-y-2">
-                  <p className="text-2xl font-semibold text-zinc-100">还没有 Recipe，来创建第一个</p>
-                  <p className="mx-auto max-w-xl text-sm leading-7 text-zinc-500">
-                    先把一个稳定可复用的视频流程写成 Recipe Repo，再让更多人 Star、Fork、执行和共创。
-                  </p>
-                </div>
-                <AuroraButton href="/recipes/new" size="lg">
-                  去创建 Recipe
-                </AuroraButton>
-              </div>
-            </GlassCard>
+            <EmptyStateActionCard
+              icon="🧪"
+              title="还没有公开 Recipe"
+              description="先去跑一条社区里的公开 Recipe，确认你的 Agent 链路跑通，再回来创建自己的第一份模板会更稳。"
+              actionLabel="先跑一条热门 Recipe"
+              actionHref="/recipes?sort=trending"
+              secondaryLabel="直接创建 Recipe"
+              secondaryHref="/recipes/new"
+            />
           )}
         </section>
       </div>

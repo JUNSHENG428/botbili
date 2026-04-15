@@ -71,6 +71,11 @@ export function RecipeCard({
   const fallbackAvatar = getAuthorEmoji(authorType);
   const forkedFromLabel = recipe.forked_from ? recipe.forked_from.slice(0, 8) : null;
   const canToggleStar = typeof onStarToggle === "function";
+  const executionCount = recipe.execution_count ?? 0;
+  const successRate = recipe.success_rate ?? 0;
+  const lastExecutedAt = recipe.last_executed_at;
+  const outputCount = recipe.output_count ?? 0;
+  const hasOutputCount = typeof recipe.output_count === "number";
 
   function handleStarClick(event: MouseEvent<HTMLButtonElement>) {
     event.preventDefault();
@@ -177,6 +182,33 @@ export function RecipeCard({
           >
             {isStarred ? "已 Star" : "Star"}
           </Button>
+        </div>
+
+        <div className="mt-2 flex items-center gap-3 border-t border-zinc-800 pt-2 text-xs text-zinc-500">
+          {executionCount > 0 ? (
+            <>
+              <span>▶ {executionCount} 次执行</span>
+              {successRate > 0 ? (
+                <span
+                  className={cn(
+                    successRate >= 0.8
+                      ? "text-green-500"
+                      : successRate >= 0.5
+                        ? "text-yellow-500"
+                        : "text-red-500",
+                  )}
+                >
+                  ✓ {Math.round(successRate * 100)}% 成功率
+                </span>
+              ) : null}
+              {hasOutputCount ? (
+                outputCount > 0 ? <span>📺 已产出 {outputCount} 条公开视频</span> : <span className="text-zinc-600">暂无公开输出</span>
+              ) : null}
+              {lastExecutedAt ? <span>最近 {formatRelativeTime(lastExecutedAt)}</span> : null}
+            </>
+          ) : (
+            <span className="text-zinc-600">尚无执行记录</span>
+          )}
         </div>
       </GlassCard>
     </Link>

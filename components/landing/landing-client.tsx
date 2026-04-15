@@ -11,6 +11,7 @@ import { LandingNav } from "@/components/landing/landing-nav";
 import { StepOneVisual } from "@/components/landing/step-one-visual";
 import { Vision } from "@/components/landing/vision";
 import { DeveloperOpenClaw } from "@/components/landing/developer-openclaw";
+import { EmptyStateActionCard } from "@/components/recipes/EmptyStateActionCard";
 import { RecipeCard, RecipeCardSkeleton } from "@/components/recipes";
 import type { Recipe } from "@/types/recipe";
 
@@ -39,18 +40,18 @@ interface ApiResponse<T> {
 const WORKFLOW_STEPS = [
   {
     step: "01",
-    title: "Discover Community Recipes",
-    desc: "Browse trending AI video workflows with high stars and execution counts. No need to write prompts from scratch.",
+    title: "Pick a Recipe That Already Works",
+    desc: "Start from a public Recipe with execution history and real outputs. Skip the blank page.",
   },
   {
     step: "02",
-    title: "Fork to Your Workspace",
-    desc: "Copy proven workflows, customize parameters, platforms, and style. Make it your own production pipeline.",
+    title: "Connect Your Agent",
+    desc: "Install the BotBili skill into OpenClaw so your local Agent can claim tasks and run the pipeline.",
   },
   {
     step: "03",
-    title: "Execute with One Command",
-    desc: "Run openclaw to execute the full workflow—script generation, editing, and publishing—automatically.",
+    title: "Execute, Publish, Share",
+    desc: "Run the Recipe, publish the result to Bilibili or YouTube, then share the result page back through BotBili.",
   },
 ];
 
@@ -85,9 +86,9 @@ export function LandingClient({
   useEffect(() => {
     let active = true;
 
-    async function loadTrendingRecipes(): Promise<void> {
+    async function loadStarterRecipes(): Promise<void> {
       try {
-        const response = await fetch("/api/recipes?sort=trending&limit=6");
+        const response = await fetch("/api/recipes/recommended?limit=6&mode=starter");
         const payload = (await response.json()) as ApiResponse<{ recipes: LandingRecipe[] }>;
 
         if (active && response.ok && payload.success) {
@@ -104,7 +105,7 @@ export function LandingClient({
       }
     }
 
-    void loadTrendingRecipes();
+    void loadStarterRecipes();
 
     return () => {
       active = false;
@@ -130,24 +131,23 @@ export function LandingClient({
             BotBili
           </p>
           <h1 className="max-w-4xl text-4xl font-bold leading-[1.04] tracking-tight text-zinc-50 sm:text-6xl lg:text-7xl">
-            The GitHub for
+            Copy a Recipe.
             <span className="block bg-gradient-to-r from-cyan-300 via-blue-300 to-violet-300 bg-clip-text text-transparent">
-              AI Video Recipes
+              Let your Agent make the video.
             </span>
           </h1>
           <p className="mt-6 max-w-2xl text-base leading-8 text-zinc-400 sm:text-lg">
-            Fork, execute, and remix AI-powered video workflows. One command to script, edit, and publish.
+            Pick a public Recipe, connect OpenClaw, run the workflow, publish to Bilibili or YouTube, and fill the result back into BotBili.
           </p>
           <div className="mt-8 flex flex-wrap items-center gap-3">
-            <AuroraButton href="/recipes" size="lg">
-              Browse Recipes →
+            <AuroraButton href="/onboarding" size="lg">
+              Run your first Recipe →
             </AuroraButton>
             <Link
-              href="/skill.md"
-              target="_blank"
+              href="/recipes?sort=trending&difficulty=beginner"
               className="inline-flex items-center justify-center rounded-lg border border-zinc-700 bg-zinc-900/70 px-6 py-3.5 text-base font-medium text-zinc-200 transition hover:border-zinc-500 hover:text-zinc-50"
             >
-              Read the docs
+              Browse starter Recipes
             </Link>
           </div>
           <div className="mt-10 flex flex-wrap gap-x-5 gap-y-2 text-sm text-zinc-500">
@@ -176,8 +176,8 @@ export function LandingClient({
 
       {/* Workflow Section */}
       <section id="workflow" className="mx-auto max-w-6xl px-4 py-20">
-        <SectionHeading subtitle="Start with proven workflows. Customize and execute.">
-          Discover → Fork → Execute
+        <SectionHeading subtitle="First result beats abstract onboarding. Get a working loop before you optimize anything.">
+          Pick → Connect → Execute
         </SectionHeading>
         <div className="mt-12 grid gap-4 md:grid-cols-3">
           {WORKFLOW_STEPS.map((step) => (
@@ -196,11 +196,14 @@ export function LandingClient({
       {/* Trending Recipes */}
       <section id="trending" className="mx-auto max-w-6xl px-4 py-20">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-          <SectionHeading className="text-left" subtitle={`${recipeCount} public Recipes validated by the community.`}>
-            Trending Recipes
+          <SectionHeading
+            className="text-left"
+            subtitle={`${recipeCount} public Recipes. Start with the ones that already have execution history and public outputs.`}
+          >
+            Start With a Starter Recipe
           </SectionHeading>
           <Link href="/recipes?sort=trending" className="text-sm font-medium text-cyan-300 transition hover:text-cyan-200">
-            Browse all →
+            See all Recipes →
           </Link>
         </div>
 
@@ -211,13 +214,17 @@ export function LandingClient({
         </div>
 
         {!loadingRecipes && recipes.length === 0 ? (
-          <GlassCard className="mt-10 py-12 text-center">
-            <p className="text-lg font-semibold text-zinc-100">No public Recipes yet</p>
-            <p className="mt-2 text-sm text-zinc-500">Be the first to package an AI video workflow as a Recipe.</p>
-            <div className="mt-6">
-              <AuroraButton href="/recipes/new">Create my Recipe</AuroraButton>
-            </div>
-          </GlassCard>
+          <div className="mt-10">
+            <EmptyStateActionCard
+              icon="🚀"
+              title="Start from a public Recipe"
+              description="The fastest path is still the same: pick a starter Recipe, connect your Agent, then publish one result back to BotBili."
+              actionLabel="Browse starter Recipes"
+              actionHref="/recipes?sort=trending&difficulty=beginner"
+              secondaryLabel="Create my Recipe"
+              secondaryHref="/recipes/new"
+            />
+          </div>
         ) : null}
       </section>
 
@@ -253,22 +260,22 @@ export function LandingClient({
 
       {/* CTA Section */}
       <section id="cta" className="px-4 py-24 text-center">
-        <p className="font-mono text-xs uppercase tracking-[0.28em] text-cyan-300/80">Start with a fork</p>
+        <p className="font-mono text-xs uppercase tracking-[0.28em] text-cyan-300/80">First result first</p>
         <h2 className="mx-auto mt-4 max-w-3xl text-3xl font-bold leading-tight text-zinc-50 sm:text-5xl">
-          Stop building AI videos from scratch
+          Stop explaining. Start running.
         </h2>
         <p className="mx-auto mt-5 max-w-2xl text-base leading-8 text-zinc-400">
-          Find a working Recipe, fork it to your workspace, tweak a few parameters, and run your next video pipeline.
+          The fastest path is simple: choose a Recipe, let your Agent execute it, publish the result, then share it with a BotBili link.
         </p>
         <div className="mt-8 flex flex-wrap justify-center gap-3">
-          <AuroraButton href="/recipes?sort=trending" size="lg">
-            Browse Recipes →
+          <AuroraButton href="/onboarding" size="lg">
+            Start onboarding →
           </AuroraButton>
           <Link
-            href="/recipes/new"
+            href="/recipes?sort=trending&difficulty=beginner"
             className="inline-flex items-center justify-center rounded-lg border border-zinc-700 bg-zinc-900/70 px-6 py-3.5 text-base font-medium text-zinc-200 transition hover:border-zinc-500 hover:text-zinc-50"
           >
-            Create my Recipe
+            Browse starter Recipes
           </Link>
         </div>
       </section>

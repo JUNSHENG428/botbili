@@ -5,7 +5,9 @@ export type RecipeExecutionStatus =
   | 'edit_done'
   | 'publishing'
   | 'success'
-  | 'failed';
+  | 'completed'
+  | 'failed'
+  | 'cancelled';
 
 export type VideoPlatform =
   | 'bilibili'
@@ -24,6 +26,59 @@ export interface RecipeExecutionOutput {
   published_at?: string;
   view_count?: number;
   platform_video_id?: string;
+}
+
+export interface RecipeExecutionMetrics {
+  views_24h?: number;
+  likes_count?: number;
+  revenue_cny?: number;
+  ctr_percent?: number;
+}
+
+export interface RecipeExecutionOutputSource {
+  output?: RecipeExecutionOutput | null;
+  output_external_url?: string | null;
+  output_thumbnail_url?: string | null;
+  output_platform?: string | null;
+  title?: string | null;
+  gif_url?: string | null;
+  published_at?: string | null;
+  view_count?: number | null;
+  platform_video_id?: string | null;
+  completed_at?: string | null;
+  updated_at?: string | null;
+}
+
+export interface RecipeExecutionStatusSnapshot extends RecipeExecutionOutputSource {
+  status: RecipeExecutionStatus;
+  progress_pct: number;
+  error_message: string | null;
+  command_text?: string | null;
+  command_preview?: string | null;
+  duration_seconds?: number | null;
+  output_video_id?: string | null;
+  output_metrics?: Record<string, unknown> | null;
+  notes?: string | null;
+  created_at?: string;
+}
+
+export interface RecipeExecutionHistoryItem extends RecipeExecutionOutputSource {
+  id: string;
+  status: RecipeExecutionStatus;
+  command_text: string | null;
+  command_preview: string | null;
+  error_message: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface RecipeExecutionCompleteRequest extends RecipeExecutionOutputSource {
+  status: "completed" | "failed" | "cancelled";
+  duration_seconds?: number;
+  output_video_id?: string;
+  output_metrics?: RecipeExecutionMetrics;
+  notes?: string;
+  error_message?: string | null;
 }
 
 export interface Recipe {
@@ -48,10 +103,20 @@ export interface Recipe {
   star_count: number;
   fork_count: number;
   exec_count: number;
+  execution_count: number;
+  completed_execution_count?: number;
+  success_rate: number;
+  avg_duration_seconds: number | null;
+  effect_score: number;
+  last_executed_at: string | null;
+  output_count?: number;
+  recent_execution_count?: number;
   comment_count: number;
   save_count: number;
   view_count: number;
   forked_from: string | null;
+  forked_from_id: string | null;
+  fork_depth: number;
   status: 'draft' | 'published' | 'archived' | 'moderated';
   visibility: 'public' | 'unlisted' | 'private';
   category: string | null;
@@ -104,20 +169,37 @@ export interface RecipeExecution {
   output_thumbnail_url: string | null;
   output_platform: string | null;
   output?: RecipeExecutionOutput | null;
+  duration_seconds: number | null;
+  output_video_id: string | null;
+  output_metrics: Record<string, unknown> | null;
+  notes: string | null;
+  fork_depth: number;
+  parent_execution_id: string | null;
   started_at: string | null;
   completed_at: string | null;
   created_at: string;
   updated_at: string;
 }
 
-export interface RecipeExecutionCallbackPayload {
+export interface RecipeExecutionCallbackPayload extends RecipeExecutionOutputSource {
   status: RecipeExecutionStatus;
   progress_pct?: number;
-  output_external_url?: string | null;
-  output_thumbnail_url?: string | null;
-  output_platform?: string | null;
   error_message?: string | null;
   command_text?: string | null;
+}
+
+export interface RecipeOutputExample {
+  id: string;
+  recipe_id: string;
+  execution_id: string;
+  title: string;
+  platform: VideoPlatform;
+  video_url: string;
+  thumbnail_url?: string;
+  gif_url?: string;
+  published_at?: string;
+  completed_at?: string | null;
+  created_at: string;
 }
 
 export interface RecipeStar {
@@ -139,6 +221,7 @@ export interface RecipeFork {
   original_recipe_id: string;
   forked_recipe_id: string;
   user_id: string;
+  forked_by?: string | null;
   created_at: string;
 }
 

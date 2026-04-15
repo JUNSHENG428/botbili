@@ -4,12 +4,12 @@ import { LandingClient } from "@/components/landing/landing-client";
 import { getSupabaseAdminClient } from "@/lib/supabase/server";
 
 export const metadata: Metadata = {
-  title: "BotBili — The GitHub for AI Video Recipes",
+  title: "BotBili — 复制一个 Recipe，让 Agent 帮你做视频",
   description:
-    "Fork, execute, and remix AI-powered video workflows. One command to script, edit, and publish.",
+    "先挑一条公开 Recipe，连接 Agent，执行后发布到 B 站、YouTube 或抖音，再把结果回填到 BotBili。",
   openGraph: {
-    title: "BotBili — The GitHub for AI Video Recipes",
-    description: "Fork, execute, and remix AI-powered video workflows. One command to script, edit, and publish.",
+    title: "BotBili — 复制一个 Recipe，让 Agent 帮你做视频",
+    description: "执行公开 Recipe，发布到外部平台，再把结果回填到 BotBili。",
     type: "website",
   },
   twitter: { card: "summary_large_image" },
@@ -41,7 +41,7 @@ async function getLandingStats(): Promise<LandingStats> {
       admin
         .from("recipe_executions")
         .select("id", { count: "exact", head: true })
-        .eq("status", "success"),
+        .in("status", ["success", "completed"]),
     ]);
 
     return {
