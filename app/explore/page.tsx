@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 
 import { GlassCard } from "@/components/design/glass-card";
 import { SectionHeading } from "@/components/design/section-heading";
+import { getSupabaseAdminClient } from "@/lib/supabase/server";
 import { getBaseUrl } from "@/lib/utils";
 
 export const revalidate = 300;
@@ -68,10 +69,40 @@ async function fetchLeaderboard(): Promise<CreatorRanking[]> {
   }
 }
 
+interface TrendingRecipe {
+  id: string;
+  title: string;
+  slug: string | null;
+  description: string | null;
+  star_count: number;
+  fork_count: number;
+  exec_count: number;
+  difficulty: string;
+  tags: string[];
+  author_type: string;
+}
+
+async function fetchTrendingRecipes(): Promise<TrendingRecipe[]> {
+  try {
+    const admin = getSupabaseAdminClient();
+    const { data } = await admin
+      .from("recipes")
+      .select("id, title, slug, description, star_count, fork_count, exec_count, difficulty, tags, author_type")
+      .eq("status", "published")
+      .eq("visibility", "public")
+      .order("star_count", { ascending: false })
+      .limit(6);
+    return (data ?? []) as TrendingRecipe[];
+  } catch {
+    return [];
+  }
+}
+
 export default async function ExplorePage() {
-  const [trends, rankings] = await Promise.all([
+  const [trends, rankings, trendingRecipes] = await Promise.all([
     fetchTrends(),
     fetchLeaderboard(),
+    fetchTrendingRecipes(),
   ]);
 
   const hasTrends =
@@ -86,6 +117,44 @@ export default async function ExplorePage() {
             探索 BotBili 上的热门 Recipe、趋势内容和优质频道
           </p>
       </div>
+
+      {/* ── 热门 Recipes ── */}
+      {trendingRecipes.length > 0 && (
+        <section>
+          <div className="flex items-center justify-between">
+            <SectionHeading>Trending Recipes</SectionHeading>
+            <Link
+              href="/recipes?sort=trending"
+              className="text-sm text-cyan-400/80 transition hover:text-cyan-300"
+            >
+              查看全部 →
+            </Link>
+          </div>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            {trendingRecipes.map((r) => (
+              <Link key={r.id} href={`/recipes/${r.slug ?? r.id}`}>
+                <GlassCard className="transition hover:border-zinc-600">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate font-medium text-zinc-200">{r.title}</p>
+                      {r.description && (
+                        <p className="mt-1 line-clamp-2 text-xs text-zinc-500">{r.description}</p>
+                      )}
+                    </div>
+                    <span className="shrink-0 text-lg">{r.author_type === "ai_agent" ? "🤖" : "👤"}</span>
+                  </div>
+                  <div className="mt-2 flex flex-wrap gap-x-3 text-xs text-zinc-500">
+                    <span>⭐ {r.star_count}</span>
+                    <span>🍴 {r.fork_count}</span>
+                    <span>▶ {r.exec_count}</span>
+                    <span className="rounded bg-zinc-800 px-1.5 py-0.5 text-[10px]">{r.difficulty}</span>
+                  </div>
+                </GlassCard>
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* ── 热门标签 ── */}
       {trends && trends.hot_tags.length > 0 && (

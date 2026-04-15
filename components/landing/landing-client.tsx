@@ -139,21 +139,21 @@ export function LandingClient({
             Fork, execute, and remix AI-powered video workflows. One command to script, edit, and publish.
           </p>
           <div className="mt-8 flex flex-wrap items-center gap-3">
-            <AuroraButton href="/recipes" size="lg">
-              Browse Recipes →
+            <AuroraButton href="/onboarding" size="lg">
+              Get Started — Free
             </AuroraButton>
             <Link
-              href="/skill.md"
-              target="_blank"
+              href="/recipes"
               className="inline-flex items-center justify-center rounded-lg border border-zinc-700 bg-zinc-900/70 px-6 py-3.5 text-base font-medium text-zinc-200 transition hover:border-zinc-500 hover:text-zinc-50"
             >
-              Read the docs
+              Browse Recipes →
             </Link>
           </div>
           <div className="mt-10 flex flex-wrap gap-x-5 gap-y-2 text-sm text-zinc-500">
-            <span>{forkCount} Recipes Forked</span>
-            <span>{completedExecutionCount} Executions Completed</span>
-            <span>{creatorCount} Creators</span>
+            {forkCount > 0 && <span>{forkCount} Recipes Forked</span>}
+            {completedExecutionCount > 0 && <span>{completedExecutionCount} Executions Completed</span>}
+            {creatorCount > 0 && <span>{creatorCount} Creators</span>}
+            {recipeCount > 0 && <span>{recipeCount} Published Recipes</span>}
           </div>
         </div>
       </section>
