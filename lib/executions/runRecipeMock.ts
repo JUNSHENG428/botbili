@@ -44,7 +44,7 @@ export async function runRecipeMock(
 
   if (!useMock) {
     // 真实 OpenClaw 调用
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://botbili.com'
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://www.botbili.com'
     await callOpenClaw({
       recipe_id: recipeId,
       execution_id: executionId,
