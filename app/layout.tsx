@@ -11,13 +11,16 @@ import { ToastProvider } from "@/components/ui/toast";
 
 const inter = Inter({ subsets: ["latin"] });
 
+const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://www.botbili.com";
+
 export const metadata: Metadata = {
-  metadataBase: new URL(
-    process.env.NEXT_PUBLIC_APP_URL ?? "https://botbili.com",
-  ),
+  metadataBase: new URL(appUrl),
   title: {
     default: "BotBili — GitHub for AI Video Recipes",
     template: "%s | BotBili",
+  },
+  alternates: {
+    canonical: "/",
   },
   description:
     "GitHub for AI Video Recipes。发现、Fork、Star、执行 AI 视频方案，BotBili 只记录 Recipe、执行状态和外部结果。",
