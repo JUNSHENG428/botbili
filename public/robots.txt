@@ -7,4 +7,4 @@ Allow: /feed/
 Disallow: /api/webhooks
 Disallow: /create
 
-Sitemap: https://botbili.com/sitemap.xml
+Sitemap: https://www.botbili.com/sitemap.xml
