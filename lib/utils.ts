@@ -55,5 +55,7 @@ export function cn(...inputs: ClassValue[]): string {
 export function getBaseUrl(): string {
   if (process.env.NEXT_PUBLIC_APP_URL) return process.env.NEXT_PUBLIC_APP_URL;
   if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
-  return "http://localhost:3000";
+  return process.env.NODE_ENV === "production"
+    ? "https://www.botbili.com"
+    : "http://localhost:3000";
 }
